@@ -1,6 +1,5 @@
 #include "common.h"
 
-
 volatile bool connected = false;
 pthread_mutex_t lock1;
 
@@ -32,7 +31,7 @@ int main(int argc, char *argv[])
         if ((choice = getchar()) == 'y')
         {
             printf("[*] Checking localhost ....\n");
-            sprintf(str_servaddr, LOCALHOST) ;
+            snprintf(str_servaddr,IPV4_STRLEN, LOCALHOST) ;
         }
         else
         {
@@ -56,20 +55,18 @@ int main(int argc, char *argv[])
     Client *client = client_init(SERVER_PORT);
     send_client_info(client);
     get_active_users(client);
-    client_to_client_chat_init(client);
 
-    /*printf("[!] ENTER \"exit()\" TO QUIT '(^u^)'\n");*/
+    printf("[!] ENTER \"exit()\" TO QUIT '(^u^)'\n");
+
     // Thread2: recieve message
     if (pthread_create(&thread2,NULL, client_recv, client) != 0)
         ERROR_HANDLE();
 
-/*
     // Thread1: send message
     if (pthread_create(&thread1,NULL, client_send, client) != 0)
+        ERROR_HANDLE();
 
-*/
-
-    pthread_join(thread2, NULL);
+    pthread_join(thread1, NULL);
 
     // Clean up
     printf("[!] Client Closed!\n");
@@ -106,6 +103,8 @@ void client_to_client_chat_init(Client *client)
         {
             strcpy(recvline, "Users available.");
         }
+        else 
+            fprintf(stderr, "client_to_client_chat_init: else cond\n");
 
     }
     
@@ -136,9 +135,8 @@ void * client_send(void *pclient)
                 pthread_mutex_lock((&lock1));
                 connected = false;
                 pthread_mutex_unlock((&lock1));
-                CLEAR_STDIN();
-                break;
             }
+            CLEAR_STDIN();
         }
 
         if (strcmp(sendline, "\n") == 0)
@@ -158,11 +156,7 @@ void * client_recv(void *pclient)
     while (connected)
     {
         client_recvline(client, recvline, MAXLINE);
-        fprintf(stderr, "\nrecvline: %s", recvline);
-        if (strcmp(recvline, "Wait.") == 0)
-            continue;
-        else if (strcmp(recvline, "Users available.") == 0)
-            client_to_client_chat_init(client);
+        printf("\n%s", recvline);
 
     }
     return NULL;
@@ -204,10 +198,8 @@ void send_client_info(Client *client)
     bool username_is_changed = false;
 
     client_sendline(client, client->name, MAXWORD);
-    /*printf("[!] Message sent!\n");*/
 
     client_recvline(client, recvline, MAXLINE);
-    printf("[!] %s\n", recvline);
     
     strcpy(name_taken, client->name);
 
@@ -221,16 +213,13 @@ void send_client_info(Client *client)
         } while (strcmp(new_name, name_taken) == 0);
 
         client_sendline(client, new_name, MAXWORD);
-        /*printf("[!] Message sent!\n");*/
 
         client_recvline(client, recvline, MAXLINE);
-        /*printf("[!] Message recieved!\n");*/
 
         if (strcmp(recvline, "Username taken.") == 0)
             strcpy(name_taken, new_name);
     }
     if (username_is_changed) strcpy(client->name, new_name);
-
 
 }
 
@@ -270,7 +259,6 @@ void client_recvline(Client *client, char buffer[], int limit)
 {
     int n;
 
-    /*if (((buffer[0] == buffer[1]) == buffer[3]) != '\0')*/
     memset(buffer, 0, limit);
 
     if ((n = recv(client->socket, buffer, limit, 0)) < 0)

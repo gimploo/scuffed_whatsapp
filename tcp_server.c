@@ -1,21 +1,6 @@
 #include "common.h"
 #include "linkedlist.h"
 
-typedef struct {
-    Client *client1;
-    Client *client2;
-    char recvline_from_client1[MAXLINE];
-    char recvline_from_client2[MAXLINE];
-} Client_Pair;
-
-typedef struct {
-    void *arg1;
-    void *arg2;
-    void *arg3;
-    void *arg4;
-    uint32_t count;
-} arguments;
-
 pthread_mutex_t lock_ll = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t wait = PTHREAD_MUTEX_INITIALIZER;
 volatile uint32_t total_clients = 0;
@@ -65,23 +50,10 @@ int main(void)
         get_client_info(client);
 
         // TODO: need to find a better way to get over this shitty bug
-        // NOTE: the bug is the client recieves both Username registered message
+        // NOTE: the bug is the client recieves Username registered message
         //       along with active user buffer at the same time.
         sleep(1);
         send_active_users(client);
-
-        if (total_clients >= 2 && server_setup_client_pair(client) == 0)
-        {
-            printf("[!] Connection made\n");
-        }
-        else 
-        {
-            char *message = "Wait.";
-            server_sendline(client, message, strlen(message));
-            pthread_mutex_lock(&wait);
-            waiting_user = client;
-            pthread_mutex_unlock(&wait);
-        }
 
         // Creates a server recv thread connection
         pthread_t thread1;
@@ -94,12 +66,12 @@ int main(void)
 
 }
 
-int server_setup_client_pair(Client *client)
+int server_setup_client_pair(Client *client1)
 {
     char *message;
     char recvline[MAXLINE];
     char sendline[MAXLINE];
-    Client *partner = NULL;
+    Client *client2 = NULL;
 
     if (total_clients == 1)
     {
@@ -108,53 +80,64 @@ int server_setup_client_pair(Client *client)
     } 
     else if (waiting_user != NULL)
     {
-        send_active_users(client);
-        sprintf(sendline, "Users available.");
+        snprintf(sendline, MAXLINE, "Users available.");
         server_sendline(waiting_user, sendline, MAXLINE);
+        server_recvline(waiting_user, recvline, MAXWORD);
+        
+        if ((waiting_user->partner = 
+                    get_available_client_by_name_from_list(recvline)) == NULL)
+        {
+            fprintf(stderr, 
+                    "server_setup_client_pair: waiting user gave an unavailable user\n");
+        }
+        else 
+        {
+            client2 = waiting_user;
+        }
         pthread_mutex_lock(&wait);
         waiting_user = NULL;
         pthread_mutex_unlock(&wait);
     }
 
-    server_sendline(client, sendline, MAXLINE);
-    server_recvline(client, recvline, MAXLINE);
+    server_sendline(client1, sendline, MAXLINE);
+    server_recvline(client1, recvline, MAXLINE);
 
     // Client choosing who to talk to
+    //
     if (does_user_exist(recvline) != 0)
     {
         message = "Invalid user.";
-        server_sendline(client, message, strlen(message));
+        server_sendline(client1, message, strlen(message));
         fprintf(stderr, "[!] server_get_client_pair: Invalid user\n");
         return -2;
     } 
-    else if (strcmp(recvline, client->name) == 0) 
+    else if (strcmp(recvline, client1->name) == 0) 
     {
         message = "Client choose itself.";
-        server_sendline(client, message, strlen(message));
+        server_sendline(client1, message, strlen(message));
         fprintf(stderr, "[!] server_get_client_pair: Client choose itself\n");
         exit(1);
     }
     
-    if ((partner = get_available_client_by_name_from_list(recvline)) == NULL)
+    if ((client1->partner = get_available_client_by_name_from_list(recvline)) == NULL)
     {
+
         fprintf(stderr, "[!] server_get_client_pair: Client not found in list\n");
         return -4;
     }
-    else if (partner->available == false)
-    {
-        message = "User unavailable.";
-        server_sendline(client, message, strlen(message));
-        fprintf(stderr, "[!] server_get_client_pair: Client not unavailable\n");
-        return -5;
-    }
-    partner->available = false;
-    client->available = false;
 
 
-    sprintf(sendline, "%s is talking with you", client->name);
-    server_sendline(partner, sendline, MAXLINE);
-    sprintf(sendline, "%s is talking with you", partner->name);
-    server_sendline(client, sendline, MAXLINE);
+    client2->available = false;
+    client1->available = false;
+
+    message = "Connected.";
+    server_sendline(client1, message, MAXLINE);
+    server_sendline(client2, message, MAXLINE);
+
+    snprintf(sendline, MAXLINE, "%s is talking with you", client1->name);
+    server_sendline(client2, sendline, MAXLINE);
+    snprintf(sendline, MAXLINE, "%s is talking with you", client2->name);
+    server_sendline(client1, sendline, MAXLINE);
     
     /*client_to_client_connection_init(client, second_client);*/
     return 0;
@@ -171,28 +154,6 @@ Client * get_available_client_by_name_from_list(char *name)
     }
     return NULL;
 }
-
-/*void client_to_client_create_connection(Client *client1, Client *client2)*/
-/*{*/
-   /*char message[MAXLINE];*/
-
-   /*sprintf(message, "[!] Connected to %s\n", client2->name);*/
-   /*server_sendline(client1, message, MAXLINE);*/
-   /*sprintf(message, "[!] Connected to %s\n", client1->name);*/
-   /*server_sendline(client2, message, MAXLINE);*/
-
-   /*pthread_t listen_thread1;*/
-   /*pthread_t listen_thread2;*/
-   /*pthread_t send_thread1;*/
-   /*pthread_t send_thread2;*/
-    
-   /*pthread_create(&listen_thread1, NULL, server_recv, client1);*/
-   /*pthread_create(&listen_thread2, NULL, server_recv, client2);*/
-   /*pthread_create(&send_thread1, NULL, server_send, client1, );*/
-   /*pthread_create(&send_thread2, NULL, server_send, client2);*/
-
-
-/*}*/
 
 void get_client_info(Client *client)
 {
@@ -239,6 +200,7 @@ Client * client_create_node(int socket, char addr[])
     Client *client = malloc(sizeof(Client));
     client->socket = socket;
     strcpy(client->straddr , addr);
+    client->partner = NULL;
     client->next = NULL;
     client->available = true;
     memset(client->name, 0, MAXWORD);
@@ -277,7 +239,6 @@ int server_init(short port, int backlog)
     if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         ERROR_HANDLE();
     
-
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -329,7 +290,7 @@ void send_active_users(Client *client)
     while (link1)
     {
         k = j = 0;
-        while(link1->name[k] != '\0')
+        while (link1->name[k] != '\0')
         {
             buffer[i++] = link1->name[k++];
         }
@@ -341,53 +302,54 @@ void send_active_users(Client *client)
     server_sendline(client, buffer, MAXLINE);
 }
 
-
-/*void * server_send(void *pclient)*/
-/*{*/
-    /*Client *client = (Client *)pclient;*/
-
-    /*while (true)*/
-    /*{*/
-        /*memset(sendline, 0, MAXLINE);*/
-        /*[>snprintf(sendline, MAXLINE, "[!] Message Recieved! uwu");<]*/
-        /*server_sendline(client, sendline, strlen(sendline));*/
-    /*}*/
-    /*return NULL;*/
-/*}*/
-
 void * server_recv(void *pclient)
 {
     Client *client = (Client *)pclient;
     char recvline[MAXLINE];
-    char client_name[MAXWORD];
-    strcpy(client_name, client->name);
+    char sendline[SENDLINE];
+    char left_client[MAXWORD];
+
+    Client *head = ll_head;
+    strcpy(left_client, client->name);
+
     while (true)
     {
-        memset(recvline, 0, MAXLINE);
+        head = ll_head;
         // Error handling when recieving from a client
         switch(server_recvline(client, recvline, MAXLINE))
         {
             // error of some kind dk
             case -1: 
-            {
-                return NULL;
-            } break;
+                {
+                    return NULL;
+                } break;
 
             // if client disconnects 
             case -2: 
-            {
-                Client *link2 = ll_head;
-                char message[MAXLINE];
-                sprintf(message, "[!] %s left server\n", client_name);
-                while (link2)
                 {
-                    server_sendline(link2, message, strlen(message));
-                    link2 = link2->next;
-                }
-                return NULL;
-            } break;
+                    Client *link2 = ll_head;
+                    char message[MAXLINE];
+                    snprintf(message, 
+                            MAXLINE, "[!] %s left server\n", left_client);
+                    while (link2)
+                    {
+                        server_sendline(link2, message, strlen(message));
+                        link2 = link2->next;
+                    }
+                    return NULL;
+                } break;
         }
-        printf("%s (%s): %s\n",client->name, client->straddr, recvline);
+        printf("%s (%s) : %s\n",client->name, client->straddr, recvline);
+
+        snprintf(sendline, 
+                MAXWORD + strlen(recvline), 
+                "%s: %s", client->name, recvline);
+        while (head)
+        {
+            if (head != client)
+                server_sendline(head, sendline, MAXLINE);
+            head = head->next;
+        }
     }
     return NULL;
 }

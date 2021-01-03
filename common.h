@@ -18,6 +18,7 @@
 #include <errno.h>
 
 #define SERVER_PORT 18000 
+#define SENDLINE 2*4096
 #define MAXLINE 4096
 #define MAXWORD 951
 #define LOCALHOST "127.0.0.1"
@@ -47,6 +48,7 @@ typedef struct client {
     int socket;
     char straddr[IPV4_STRLEN+1];
     bool available;
+    struct client *partner;
     struct client *next;
 } Client;
 
