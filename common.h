@@ -37,12 +37,6 @@
     while (getchar() != '\n');\
 }
 
-#define THREAD_INIT(pclient,pfunc) \
-{\
-    pthread_t thread;\
-    pthread_create(&thread, NULL, pfunc, pclient);\
-}
-
 typedef struct client {
     char name[MAXWORD+1];
     int socket;
