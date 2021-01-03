@@ -1,6 +1,6 @@
 # scuffed whatsapp
 
-A fun little project to learn about socket programming and how to implement in c. The goal is have it function just more or less like whatsapp i.e private one to one connections along with a group chat functionality.
+A fun little project to learn about socket programming and how to implement in c. The goal is to have it function more or less like whatsapp i.e private one to one connections along with a group chat functionality.
 
 ## Usage
 1. Build the project 
