@@ -7,6 +7,7 @@ Client *ll_head = NULL;
 Client *ll_tail = NULL;
 
 Client * client_init(int server_port);
+void client_thread_init(Client *client);
 void * client_send(void *pclient);
 void * client_recv(void *client);
 
@@ -16,7 +17,7 @@ void send_client_info(Client *client);
 void client_sendline(Client *client, char buffer[], int limit);
 void client_recvline(Client *client, char buffer[], int limit);
 
-void client_to_client_chat_init(Client *client);
+void client_set_partner(Client *client);
 
 int main(int argc, char *argv[])
 {
@@ -48,8 +49,6 @@ int main(int argc, char *argv[])
     printf("[!] CONNECTED TO %s\n", 
             strcmp(str_servaddr,LOCALHOST) == 0 ? "localhost":str_servaddr);
     
-    pthread_t  thread1; 
-    pthread_t  thread2;
 
     // Creating the client struct
     Client *client = client_init(SERVER_PORT);
@@ -57,6 +56,20 @@ int main(int argc, char *argv[])
     get_active_users(client);
 
     printf("[!] ENTER \"exit()\" TO QUIT '(^u^)'\n");
+    client_thread_init(client);
+
+    // Clean up
+    printf("[!] Client Closed!\n");
+    close(client->socket);
+    free(client);
+
+    return 0;
+}
+
+void client_thread_init(Client *client)
+{
+    pthread_t  thread1; 
+    pthread_t  thread2;
 
     // Thread2: recieve message
     if (pthread_create(&thread2,NULL, client_recv, client) != 0)
@@ -67,49 +80,7 @@ int main(int argc, char *argv[])
         ERROR_HANDLE();
 
     pthread_join(thread1, NULL);
-
-    // Clean up
-    printf("[!] Client Closed!\n");
-    close(client->socket);
-    free(client);
-
-    return 0;
 }
-
-void client_to_client_chat_init(Client *client)
-{
-    char choice[SERVER_BACKLOG+1];
-    char recvline[MAXLINE+1];
-    
-    client_recvline(client, recvline, MAXLINE);
-    while (connected)
-    {
-        if (strcmp(recvline, "Users available.") == 0)
-        {
-            printf("[?] Who do u want to talk to: ");
-            fgets(choice, SERVER_BACKLOG, stdin);
-            choice[strlen(choice)-1] = '\0';
-            client_sendline(client, choice, strlen(choice));
-            client_recvline(client, recvline, MAXLINE);
-            printf("[!] %s\n", recvline);
-        }
-        else if (strcmp(recvline, "Wait.") == 0)
-        {
-            printf("[!] Waiting ....\n");
-            client_recvline(client, recvline, MAXLINE);
-            continue;
-        } 
-        else if (strcmp(recvline, "User unavailable.") == 0)
-        {
-            strcpy(recvline, "Users available.");
-        }
-        else 
-            fprintf(stderr, "client_to_client_chat_init: else cond\n");
-
-    }
-    
-}
-
 
 void * client_send(void *pclient)
 {
@@ -141,6 +112,22 @@ void * client_send(void *pclient)
 
         if (strcmp(sendline, "\n") == 0)
             continue;
+
+        //TESTING
+        else if (strcmp(sendline , "tits\n") == 0)
+        {
+            strcpy(sendline, msg_to_cstr(CLIENT_ACTIVE_USERS));
+            client_sendline(client, sendline, MAXWORD);
+            get_active_users(client);
+            continue;
+        }
+        else if (strcmp(sendline, "gf\n") == 0)
+        {
+            strcpy(sendline, msg_to_cstr(CLIENT_SET_PARTNER));
+            client_sendline(client, sendline, MAXWORD);
+            client_set_partner(client);
+            continue;
+        }
 
         client_sendline(client, sendline, strlen(sendline));
 
@@ -203,7 +190,8 @@ void send_client_info(Client *client)
     
     strcpy(name_taken, client->name);
 
-    while (strcmp(recvline, "Username taken.") == 0)
+    // While username is taken
+    while (strcmp(recvline, msg_to_cstr(CLIENT_USERNAME_TAKEN)) == 0)
     {
         username_is_changed = true;
         do {
@@ -216,11 +204,23 @@ void send_client_info(Client *client)
 
         client_recvline(client, recvline, MAXLINE);
 
-        if (strcmp(recvline, "Username taken.") == 0)
+        if (strcmp(recvline,msg_to_cstr(CLIENT_USERNAME_TAKEN)) == 0)
             strcpy(name_taken, new_name);
     }
     if (username_is_changed) strcpy(client->name, new_name);
 
+}
+
+void client_set_partner(Client *client)
+{
+    char buffer[MAXWORD+1];
+    get_active_users(client);
+    printf("[?] Who do u want to talk with: ");
+    fgets(buffer, MAXWORD, stdin);
+    buffer[strlen(buffer) - 1] = '\0';
+    client_sendline(client, buffer, MAXWORD);
+    client_recvline(client, buffer, MAXWORD);
+    printf("client_set_partner: %s", buffer);
 }
 
 bool get_active_users(Client *client)

@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <errno.h>
+#include <math.h>
 
 #define SERVER_PORT 18000 
 #define SENDLINE 2*4096
@@ -37,6 +38,19 @@
     while (getchar() != '\n');\
 }
 
+typedef enum {
+    SUCCESS,
+    FAILED,
+    CLIENT_UNAVAILABLE,
+    CLIENT_NOT_FOUND,
+    CLIENT_RECIEVE,
+    CLIENT_ACTIVE_USERS,
+    CLIENT_SET_PARTNER,
+    CLIENT_USERNAME_TAKEN,
+    CLIENT_REGISTERED,
+    INVALID
+} MSG_TYPE;
+
 typedef struct client {
     char name[MAXWORD+1];
     int socket;
@@ -45,5 +59,8 @@ typedef struct client {
     struct client *partner;
     struct client *next;
 } Client;
+
+char * msg_to_cstr(MSG_TYPE msg);
+MSG_TYPE cstr_to_msg(char *cstring);
 
 #endif
