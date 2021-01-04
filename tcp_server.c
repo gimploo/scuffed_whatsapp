@@ -2,7 +2,7 @@
 #include "linkedlist.h"
 
 pthread_mutex_t lock_ll = PTHREAD_MUTEX_INITIALIZER;
-volatile uint32_t total_clients = 0;
+uint32_t total_clients = 0;
 Client *ll_head = NULL;
 
 // Server 
@@ -100,10 +100,11 @@ Client * client_create_node(int socket, char addr[])
 {
     Client *client = malloc(sizeof(Client));
     client->socket = socket;
-    strcpy(client->straddr , addr);
     client->partner = NULL;
     client->next = NULL;
     client->available = true;
+
+    strcpy(client->straddr , addr);
     memset(client->name, 0, MAXWORD);
 
     // Appends new client to the linked list DS 
@@ -206,6 +207,7 @@ void send_active_users(Client *client)
 void * server_recv(void *pclient)
 {
     Client *client = (Client *)pclient;
+    char recvline[MAXLINE];
     char buffer[MAXLINE];
     char left_client[MAXWORD];
 
@@ -214,7 +216,7 @@ void * server_recv(void *pclient)
     while (true)
     {
         // Error handling when recieving from a client
-        switch(server_recvline(client, buffer, MAXLINE)) {
+        switch(server_recvline(client, recvline, MAXLINE)) {
             // error of some kind dk
             case -1: 
             {
@@ -235,7 +237,7 @@ void * server_recv(void *pclient)
             } break;
         }
 
-        server_message_handler(client, buffer, cstr_to_msg(buffer));
+        server_message_handler(client, recvline, cstr_to_msg(recvline));
     }
     return NULL;
 }
@@ -295,7 +297,7 @@ void server_message_handler(Client *client, char buffer[], MSG_TYPE msg)
     }
 
 }
-Client * get_client_from_list( char *name )
+Client * get_client_from_list(char *name)
 {
     Client *node = ll_head;
     while (node)
@@ -307,28 +309,56 @@ Client * get_client_from_list( char *name )
     return NULL;
 }
 
-void client_get_partner( Client *client )
+void client_get_partner(Client *client)
 {
-    char recvline[MAXWORD];
+    char recvline[SENDLINE];
     Client *partner = NULL;
     send_active_users( client );
     server_recvline( client, recvline, MAXWORD );
 
-    if ( does_user_exist( recvline ) == 0 &&  
-            (partner = get_client_from_list( recvline )) != NULL)
+    if ((partner = get_client_from_list( recvline )) != NULL)
     {
         if ( partner->available == true )
         {
             if ( partner->partner == client)
             {
                 client->partner = partner;
+                client->available = false;
                 server_sendline( client, msg_to_cstr( SUCCESS ), MAXWORD );
+                server_sendline( client->partner, 
+                        msg_to_cstr( SUCCESS ), MAXWORD );
             }
             else 
             {
-                // TODO: maybe have the client wait untill partner is available
-                fprintf(stderr, "client_select_partner: partner == false\n");
-                server_sendline( client, msg_to_cstr( FAILED ), MAXWORD );
+                /*fprintf(stderr, "client_select_partner: partner == false\n");*/
+
+                server_sendline( client, msg_to_cstr( WAIT ), MAXWORD );
+                server_sendline( partner, msg_to_cstr( WAIT ), MAXWORD );
+
+                snprintf(recvline, SENDLINE, 
+                        "%s wants to talk to you\n", client->name);
+                server_sendline( partner, recvline, SENDLINE);
+                server_recvline( partner, recvline, SENDLINE);
+                if (strcmp(recvline, "yes") == 0)
+                {
+                    Client *partners_partner = partner->partner;
+                    partners_partner->partner = client;
+                    if (partners_partner != NULL)
+                    {
+                        partners_partner->available = true;
+                        partners_partner->partner = NULL;
+                    }
+                    snprintf(recvline, SENDLINE, 
+                            "%s is talking to you\n", partner->name);
+                    server_sendline( partner, recvline, SENDLINE);
+                }
+                else 
+                {
+                    snprintf(recvline, SENDLINE, 
+                            "%s is busy\n", partner->name);
+                    server_sendline( client, recvline, SENDLINE);
+
+                }
             }
         }
         else 
@@ -362,13 +392,13 @@ void server_remove_client(Client *client)
     switch (ll_deletion(&ll_head, client))
     {
         case 0:
-            printf("[!] ll_deletion: element deleted\n");
+            fprintf(stderr, "[!] ll_deletion: element deleted\n");
             break;
         case 1:
-            printf("[!] ll_deletion: list empty\n");
+            fprintf(stderr, "[!] ll_deletion: list empty\n");
             break;
         case 2:
-            printf("[!] ll_deletion: element not found\n");
+            fprintf(stderr, "[!] ll_deletion: element not found\n");
             break;
     }
     pthread_mutex_unlock(&lock_ll);

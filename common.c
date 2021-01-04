@@ -5,8 +5,9 @@ char * msg_to_cstr(MSG_TYPE msg)
     switch (msg) {
         case SUCCESS:               return "SUCCESS";
         case FAILED:                return "FAILED";
-        case CLIENT_NOT_FOUND:      return "CLIENT_NOT_FOUND";
+        case WAIT:                  return "WAIT";
         case CLIENT_UNAVAILABLE:    return "CLIENT_UNAVAILABLE";
+        case CLIENT_NOT_FOUND:      return "CLIENT_NOT_FOUND";
         case CLIENT_RECIEVE:        return "CLIENT_RECIEVE";
         case CLIENT_ACTIVE_USERS:   return "GIVE_ACTIVE_USERS";
         case CLIENT_SET_PARTNER:    return "CLIENT_SET_PARTNER";
@@ -22,6 +23,8 @@ MSG_TYPE cstr_to_msg(char *cstring)
         return SUCCESS;
     else if (strcmp(cstring, "FAILED") == 0)
         return FAILED;
+    else if (strcmp(cstring, "WAIT") == 0)
+        return WAIT;
     else if (strcmp(cstring, "CLIENT_SET_PARTNER") == 0)
         return CLIENT_SET_PARTNER;
     else if (strcmp(cstring, "GIVE_ACTIVE_USERS") == 0)

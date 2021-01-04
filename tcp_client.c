@@ -173,7 +173,6 @@ Client * client_init(int server_port)
 
     connected = true;
 
-
     return client;
 }
 
@@ -214,13 +213,35 @@ void send_client_info(Client *client)
 void client_set_partner(Client *client)
 {
     char buffer[MAXWORD+1];
+    char recvline[MAXWORD];
+    char choice[4];
+
     get_active_users(client);
     printf("[?] Who do u want to talk with: ");
     fgets(buffer, MAXWORD, stdin);
     buffer[strlen(buffer) - 1] = '\0';
+
     client_sendline(client, buffer, MAXWORD);
-    client_recvline(client, buffer, MAXWORD);
-    printf("client_set_partner: %s", buffer);
+    client_recvline(client, recvline, MAXWORD);
+
+    switch(cstr_to_msg(recvline))
+    {
+        case WAIT:
+            client_recvline(client, recvline, MAXWORD);
+            printf("[?] choice (yes or no): ");
+            fgets(choice, 4, stdin);
+            choice[strlen(choice) - 1] = '\0';
+            client_sendline(client, choice, 4);
+            client_recvline(client, buffer, MAXWORD);
+            break;
+        case SUCCESS:
+            client->available = false;
+            printf("[!] PRIVATE CONNECTION ESTABLISHED\n");
+            break;
+        default:
+            printf("client_set_partner: %s", buffer);
+            break;
+    }
 }
 
 bool get_active_users(Client *client)
@@ -229,10 +250,10 @@ bool get_active_users(Client *client)
     bool isempty = true;
     int i = 0;
 
-    client_recvline(client, buffer, MAXLINE);
     printf("\n-----------------\n");
     printf("  Active Users\n");
     printf("-----------------\n");
+    client_recvline(client, buffer, MAXLINE);
     while (buffer[i] != '\0')
     {
         printf("%c", buffer[i]);

@@ -41,6 +41,7 @@
 typedef enum {
     SUCCESS,
     FAILED,
+    WAIT,
     CLIENT_UNAVAILABLE,
     CLIENT_NOT_FOUND,
     CLIENT_RECIEVE,
