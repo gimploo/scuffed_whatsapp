@@ -12,7 +12,7 @@ int server_recvline(Client *client, char buffer[], size_t limit);
 Client * accept_connection(int server_socket);
 void server_remove_client(Client *client);
 void server_add_client(Client *client);
-void server_message_handler(Client *client, char recvline[], MSG_TYPE msg);
+void server_service_handler(Client *client, char recvline[], MSG_TYPE msg);
 
 // Thread specific functions
 void * server_recv(void *client);
@@ -26,7 +26,7 @@ void client_get_partner( Client *client );
 void print_active_users(Client *head);
 void send_active_users(Client *client);
 int does_user_exist(char *name);
-Client * get_client_from_list( char *name );
+Client * get_client_from_list(char *name);
 
 int main(void)
 {
@@ -74,10 +74,10 @@ void get_client_info(Client *client)
     // Checks if the name already exist
     while (does_user_exist(recvline) == 0)
     {
-        server_message_handler(client, recvline, CLIENT_USERNAME_TAKEN);
+        server_service_handler(client, recvline, CLIENT_USERNAME_TAKEN);
     }
 
-    server_message_handler(client, recvline, CLIENT_REGISTERED);
+    server_service_handler(client, recvline, CLIENT_REGISTERED);
 
     // sets the name to the client struct
     strcpy(client->name, recvline);
@@ -180,12 +180,14 @@ void send_active_users(Client *client)
 {
     char buffer[MAXLINE];
     Client *link1 = ll_head;
+    /*
     if (ll_head == NULL && total_clients == 1)
     {
         strcpy(buffer,"(~ o ~) . z Z)");
         server_sendline(client, buffer, MAXLINE);
         return ;
     }
+    */
 
     int j,k;
     int i = 0;
@@ -237,7 +239,7 @@ void * server_recv(void *pclient)
             } break;
         }
 
-        server_message_handler(client, recvline, cstr_to_msg(recvline));
+        server_service_handler(client, recvline, cstr_to_msg(recvline));
     }
     return NULL;
 }
@@ -275,7 +277,7 @@ int server_recvline(Client *client, char buffer[], size_t limit)
     return 0;
 }
 
-void server_message_handler(Client *client, char buffer[], MSG_TYPE msg)
+void server_service_handler(Client *client, char buffer[], MSG_TYPE msg)
 {
     switch (msg) {
         case CLIENT_ACTIVE_USERS:
@@ -312,11 +314,15 @@ Client * get_client_from_list(char *name)
 void client_get_partner(Client *client)
 {
     char recvline[SENDLINE];
+    char sendline[SENDLINE];
     Client *partner = NULL;
-    send_active_users( client );
+
+    /*send_active_users( client );*/
+
     server_recvline( client, recvline, MAXWORD );
 
-    if ((partner = get_client_from_list( recvline )) != NULL)
+    if ((partner = get_client_from_list( recvline )) != NULL && 
+            strcmp(recvline, client->name) != 0)
     {
         if ( partner->available == true )
         {
@@ -333,12 +339,14 @@ void client_get_partner(Client *client)
                 /*fprintf(stderr, "client_select_partner: partner == false\n");*/
 
                 server_sendline( client, msg_to_cstr( WAIT ), MAXWORD );
-                server_sendline( partner, msg_to_cstr( WAIT ), MAXWORD );
+                server_sendline( partner, msg_to_cstr( ASK ), MAXWORD );
 
-                snprintf(recvline, SENDLINE, 
+                snprintf(sendline, SENDLINE, 
                         "%s wants to talk to you\n", client->name);
-                server_sendline( partner, recvline, SENDLINE);
+
+                server_sendline( partner, sendline, SENDLINE);
                 server_recvline( partner, recvline, SENDLINE);
+
                 if (strcmp(recvline, "yes") == 0)
                 {
                     Client *partners_partner = partner->partner;
@@ -348,15 +356,15 @@ void client_get_partner(Client *client)
                         partners_partner->available = true;
                         partners_partner->partner = NULL;
                     }
-                    snprintf(recvline, SENDLINE, 
+                    snprintf(sendline, SENDLINE, 
                             "%s is talking to you\n", partner->name);
-                    server_sendline( partner, recvline, SENDLINE);
+                    server_sendline( client, sendline, SENDLINE);
                 }
                 else 
                 {
-                    snprintf(recvline, SENDLINE, 
+                    snprintf(sendline, SENDLINE, 
                             "%s is busy\n", partner->name);
-                    server_sendline( client, recvline, SENDLINE);
+                    server_sendline( client, sendline, SENDLINE);
 
                 }
             }

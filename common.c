@@ -1,11 +1,23 @@
 #include "common.h"
 
+void cstring_input(char *message, char buffer[])
+{
+    if (message != NULL)
+        printf("%s", message);
+    char chr;
+    int i = 0;
+    while ((chr = getchar()) != '\n')
+        buffer[i++] = chr;
+    buffer[i] = '\0';
+}
+
 char * msg_to_cstr(MSG_TYPE msg)
 {
     switch (msg) {
         case SUCCESS:               return "SUCCESS";
         case FAILED:                return "FAILED";
         case WAIT:                  return "WAIT";
+        case ASK:                   return "ASK";
         case CLIENT_UNAVAILABLE:    return "CLIENT_UNAVAILABLE";
         case CLIENT_NOT_FOUND:      return "CLIENT_NOT_FOUND";
         case CLIENT_RECIEVE:        return "CLIENT_RECIEVE";
@@ -25,6 +37,8 @@ MSG_TYPE cstr_to_msg(char *cstring)
         return FAILED;
     else if (strcmp(cstring, "WAIT") == 0)
         return WAIT;
+    else if (strcmp(cstring, "ASK") == 0)
+        return ASK;
     else if (strcmp(cstring, "CLIENT_SET_PARTNER") == 0)
         return CLIENT_SET_PARTNER;
     else if (strcmp(cstring, "GIVE_ACTIVE_USERS") == 0)

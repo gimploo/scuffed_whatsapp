@@ -42,6 +42,7 @@ typedef enum {
     SUCCESS,
     FAILED,
     WAIT,
+    ASK,
     CLIENT_UNAVAILABLE,
     CLIENT_NOT_FOUND,
     CLIENT_RECIEVE,
@@ -60,6 +61,8 @@ typedef struct client {
     struct client *partner;
     struct client *next;
 } Client;
+
+void cstring_input(char *message, char buffer[]);
 
 char * msg_to_cstr(MSG_TYPE msg);
 MSG_TYPE cstr_to_msg(char *cstring);

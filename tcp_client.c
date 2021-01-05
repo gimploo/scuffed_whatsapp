@@ -89,16 +89,15 @@ void * client_send(void *pclient)
     char chr;
     while (connected)
     {
-        memset(sendline, 0, MAXLINE);
         printf("%s : ", client->name);
-        fgets(sendline, MAXLINE, stdin);
+        cstring_input(NULL, sendline);
 
-        if (strcmp(sendline, "exit()\n") == 0)
+        if (strcmp(sendline, "exit()") == 0)
         {
             printf("\n[?] Do you want to exit (y or n): ");
             if ((chr = getchar()) == 'n')
             {
-                fgets(sendline, MAXLINE, stdin);
+                cstring_input(NULL, sendline);
                 continue;
             }
             else
@@ -114,14 +113,14 @@ void * client_send(void *pclient)
             continue;
 
         //TESTING
-        else if (strcmp(sendline , "tits\n") == 0)
+        else if (strcmp(sendline , "tits") == 0)
         {
             strcpy(sendline, msg_to_cstr(CLIENT_ACTIVE_USERS));
             client_sendline(client, sendline, MAXWORD);
             get_active_users(client);
             continue;
         }
-        else if (strcmp(sendline, "gf\n") == 0)
+        else if (strcmp(sendline, "gf") == 0)
         {
             strcpy(sendline, msg_to_cstr(CLIENT_SET_PARTNER));
             client_sendline(client, sendline, MAXWORD);
@@ -153,9 +152,7 @@ void * client_recv(void *pclient)
 Client * client_init(int server_port)
 {
     Client *client = malloc(sizeof(Client));
-    printf("[?] Name: ");
-    fgets(client->name, MAXWORD, stdin);
-    client->name[strlen(client->name)-1] = '\0';
+    cstring_input("[?] Name: ", client->name);
     client->next = NULL;
 
     if ((client->socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -194,9 +191,7 @@ void send_client_info(Client *client)
     {
         username_is_changed = true;
         do {
-            printf("[?] NEW Name: ");
-            fgets(new_name, MAXWORD, stdin);
-            new_name[strlen(new_name)-1] = '\0';
+            cstring_input("[?] That name is taken, make another: ", new_name);
         } while (strcmp(new_name, name_taken) == 0);
 
         client_sendline(client, new_name, MAXWORD);
@@ -216,30 +211,31 @@ void client_set_partner(Client *client)
     char recvline[MAXWORD];
     char choice[4];
 
-    get_active_users(client);
-    printf("[?] Who do u want to talk with: ");
-    fgets(buffer, MAXWORD, stdin);
-    buffer[strlen(buffer) - 1] = '\0';
+    /*get_active_users(client);*/
+
+    cstring_input("[?] Who do u want to talk with: ", buffer);
 
     client_sendline(client, buffer, MAXWORD);
     client_recvline(client, recvline, MAXWORD);
 
     switch(cstr_to_msg(recvline))
     {
-        case WAIT:
+        case ASK:
             client_recvline(client, recvline, MAXWORD);
-            printf("[?] choice (yes or no): ");
-            fgets(choice, 4, stdin);
-            choice[strlen(choice) - 1] = '\0';
+            cstring_input("[?] choice (yes or no): ", choice);
             client_sendline(client, choice, 4);
             client_recvline(client, buffer, MAXWORD);
+            break;
+        case WAIT:
+            printf("[!] Waiting ....\n");
+            client_recvline(client, recvline, MAXWORD);
             break;
         case SUCCESS:
             client->available = false;
             printf("[!] PRIVATE CONNECTION ESTABLISHED\n");
             break;
         default:
-            printf("client_set_partner: %s", buffer);
+            fprintf(stderr, "\nclient_set_partner: %s\n", buffer);
             break;
     }
 }
