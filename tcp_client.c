@@ -113,14 +113,14 @@ void * client_send(void *pclient)
             continue;
 
         //TESTING
-        else if (strcmp(sendline , "tits") == 0)
+        else if (strcmp(sendline , "active") == 0)
         {
             strcpy(sendline, msg_to_cstr(CLIENT_ACTIVE_USERS));
             client_sendline(client, sendline, MAXWORD);
             get_active_users(client);
             continue;
         }
-        else if (strcmp(sendline, "gf") == 0)
+        else if (strcmp(sendline, "msg") == 0)
         {
             strcpy(sendline, msg_to_cstr(CLIENT_SET_PARTNER));
             client_sendline(client, sendline, MAXWORD);
@@ -211,7 +211,7 @@ void client_set_partner(Client *client)
     char recvline[MAXWORD];
     char choice[4];
 
-    /*get_active_users(client);*/
+    get_active_users(client);
 
     cstring_input("[?] Who do u want to talk with: ", buffer);
 

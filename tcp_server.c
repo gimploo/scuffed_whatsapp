@@ -180,6 +180,7 @@ void send_active_users(Client *client)
 {
     char buffer[MAXLINE];
     Client *link1 = ll_head;
+    int j, k, i = 0;
     /*
     if (ll_head == NULL && total_clients == 1)
     {
@@ -189,8 +190,6 @@ void send_active_users(Client *client)
     }
     */
 
-    int j,k;
-    int i = 0;
     while (link1)
     {
         k = j = 0;
@@ -202,6 +201,8 @@ void send_active_users(Client *client)
         link1 = link1->next;
     }
     buffer[i-1]= '\0';
+
+    printf("send_active_users: sending active users to %s\n", client->name);
 
     server_sendline(client, buffer, MAXLINE);
 }
@@ -317,7 +318,7 @@ void client_get_partner(Client *client)
     char sendline[SENDLINE];
     Client *partner = NULL;
 
-    /*send_active_users( client );*/
+    send_active_users( client );
 
     server_recvline( client, recvline, MAXWORD );
 
