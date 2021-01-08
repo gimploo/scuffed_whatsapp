@@ -13,20 +13,21 @@ Client * accept_connection(int server_socket);
 void server_remove_client(Client *client);
 void server_add_client(Client *client);
 void server_service_handler(Client *client, char recvline[], MSG_TYPE msg);
+void server_send_message(Client *client, MSG_TYPE request);
 
 // Thread specific functions
 void * server_recv(void *client);
 
 // Client
 Client * client_create_node(int socket, char *addr);
-void get_client_info(Client *this_client);
+void client_get_info(Client *this_client);
 void client_get_partner( Client *client );
     
 // miscellaneous
 void print_active_users(Client *head);
 void send_active_users(Client *client);
 int does_user_exist(char *name);
-Client * get_client_from_list(char *name);
+Client * client_get_by_name_from_list(char *name);
 
 int main(void)
 {
@@ -44,11 +45,6 @@ int main(void)
         // Accepts incomming connection
         Client *client = accept_connection(server_socket);
 
-        // Request for the client info (rn only username from the client)
-        get_client_info(client);
-
-        send_active_users(client);
-
         // Creates a server recv thread connection
         pthread_t thread1;
         pthread_create(&thread1, NULL, server_recv, client);
@@ -60,7 +56,7 @@ int main(void)
 
 }
 
-void get_client_info(Client *client)
+void client_get_info(Client *client)
 {
     char recvline[MAXWORD];
 
@@ -70,10 +66,11 @@ void get_client_info(Client *client)
     // Checks if the name already exist
     while (does_user_exist(recvline) == 0)
     {
-        server_service_handler(client, recvline, CLIENT_USERNAME_TAKEN);
+        server_send_message(client, CLIENT_USERNAME_TAKEN);
+        server_recvline(client, recvline, MAXWORD);
     }
 
-    server_service_handler(client, recvline, CLIENT_REGISTERED);
+    server_send_message(client, CLIENT_REGISTERED);
 
     // sets the name to the client struct
     strcpy(client->name, recvline);
@@ -105,6 +102,9 @@ Client * client_create_node(int socket, char addr[])
 
     // Appends new client to the linked list DS 
     server_add_client(client);
+
+    // Request for the client info (rn only username from the client)
+    client_get_info(client);
 
     return client;
 }
@@ -177,14 +177,14 @@ void send_active_users(Client *client)
     char buffer[MAXLINE];
     Client *link1 = ll_head;
     int j, k, i = 0;
-    /*
+    
     if (ll_head == NULL && total_clients == 1)
     {
         strcpy(buffer,"(~ o ~) . z Z)");
         server_sendline(client, buffer, MAXLINE);
         return ;
     }
-    */
+    
 
     pthread_rwlock_rdlock(&client->lock);
     while (link1)
@@ -200,8 +200,8 @@ void send_active_users(Client *client)
     buffer[i-1]= '\0';
     pthread_rwlock_unlock(&client->lock);
 
-    printf("send_active_users: sending active users to %s\n", client->name);
-
+    /*printf("send_active_users: sending active users to %s\n", client->name);*/
+    printf("----\nOUTPUT:\n%s\n---\n", buffer);
     server_sendline(client, buffer, MAXLINE);
 }
 
@@ -209,38 +209,43 @@ void * server_recv(void *pclient)
 {
     Client *client = (Client *)pclient;
     char recvline[MAXLINE];
-    char buffer[MAXLINE];
-    char left_client[MAXWORD];
-
-    strcpy(left_client, client->name);
 
     while (true)
     {
-        // Error handling when recieving from a client
-        switch(server_recvline(client, recvline, MAXLINE)) {
-            // error of some kind dk
+        // Recieves the request
+        switch(server_recvline(client, recvline, MAXLINE)) 
+        {
+            // error 
             case -1: 
-            {
-                return NULL;
-            } break;
-
-            // if client disconnects 
+            // Client disconnected
             case -2: 
-            {
-                Client *link2 = ll_head;
-                char message[MAXLINE];
-                snprintf(message, MAXLINE, "[!] %s left server\n", left_client);
-                pthread_rwlock_rdlock(&client->lock);
-                while (link2) {
-                    server_sendline(link2, message, strlen(message));
-                    link2 = link2->next;
-                }
-                pthread_rwlock_unlock(&client->lock);
                 return NULL;
-            } break;
+                break;
         }
 
-        server_service_handler(client, recvline, cstr_to_msg(recvline));
+        MSG_TYPE request = cstr_to_msg(recvline);
+
+        // Handles the request accordingly
+        switch (request) 
+        {
+            case ACTIVE_USERS:
+                server_send_message(client, ACTIVE_USERS);
+                send_active_users(client);
+                break;
+            case CLIENT_USERNAME_TAKEN:
+                server_send_message(client, CLIENT_USERNAME_TAKEN);
+                server_recvline(client, recvline, MAXWORD);
+                break;
+            case CLIENT_REGISTERED:
+                server_send_message(client, CLIENT_REGISTERED);
+                break;
+             case CLIENT_SET_PARTNER:
+                client_get_partner(client);
+                break;
+             default:
+                fprintf(stderr, "server_request: %s\n", recvline);
+                break;
+        }
     }
     return NULL;
 }
@@ -278,29 +283,11 @@ int server_recvline(Client *client, char buffer[], size_t limit)
     return 0;
 }
 
-void server_service_handler(Client *client, char buffer[], MSG_TYPE msg)
+void server_send_message(Client *client, MSG_TYPE request)
 {
-    switch (msg) {
-        case CLIENT_ACTIVE_USERS:
-            send_active_users(client);
-            break;
-        case CLIENT_USERNAME_TAKEN:
-            server_sendline(client, msg_to_cstr(msg), MAXLINE);
-            server_recvline(client, buffer, MAXWORD);
-            break;
-        case CLIENT_REGISTERED:
-            server_sendline(client, msg_to_cstr(msg), MAXLINE);
-            break;
-         case CLIENT_SET_PARTNER:
-            client_get_partner(client);
-            break;
-         default:
-            fprintf(stderr, "server_request: %s\n", buffer);
-            break;
-    }
-
+    server_sendline(client, msg_to_cstr(request), MAXMSG);
 }
-Client * get_client_from_list(char *name)
+Client * client_get_by_name_from_list(char *name)
 {
     Client *node = ll_head;
     while (node)
@@ -320,11 +307,9 @@ void client_get_partner(Client *client)
     char sendline[SENDLINE];
     Client *partner = NULL;
 
-    send_active_users( client );
-
     server_recvline( client, recvline, MAXWORD );
 
-    if ((partner = get_client_from_list( recvline )) != NULL)
+    if ((partner = client_get_by_name_from_list( recvline )) != NULL)
     {
         if ( partner->available == true )
         {
@@ -332,21 +317,18 @@ void client_get_partner(Client *client)
             {
                 client->partner = partner;
                 client->available = false;
-                server_sendline( client, msg_to_cstr( SUCCESS ), MAXWORD );
-                server_sendline( client->partner, 
-                        msg_to_cstr( SUCCESS ), MAXWORD );
+                server_send_message(client, SUCCESS);
+                server_send_message(client->partner, SUCCESS);
             }
             else 
             {
-                /*fprintf(stderr, "client_select_partner: partner == false\n");*/
-
-                server_sendline( client, msg_to_cstr( WAIT ), MAXWORD );
+                server_send_message(client, WAIT);
 
                 snprintf(sendline, SENDLINE, 
                         "%s wants to talk to you\n", client->name);
                 server_sendline( partner, sendline, SENDLINE);
 
-                server_sendline(partner, msg_to_cstr(ASK), MAXWORD);
+                server_send_message(client, ASK);
                 server_recvline( partner, recvline, SENDLINE);
 
                 if (strcmp(recvline, "yes") == 0)
@@ -360,7 +342,6 @@ void client_get_partner(Client *client)
                     }
                     snprintf(sendline, SENDLINE, 
                             "%s is talking to you\n", partner->name);
-                    server_sendline( client, msg_to_cstr(CLIENT_RECIEVE), SENDLINE);
                     server_sendline( client, sendline, SENDLINE);
                 }
                 else 

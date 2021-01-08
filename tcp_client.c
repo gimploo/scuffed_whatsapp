@@ -11,13 +11,14 @@ void client_thread_init(Client *client);
 void * client_send(void *pclient);
 void * client_recv(void *client);
 
-bool get_active_users(Client *client);
-void send_client_info(Client *client);
+void print_active_users(char buffer[]);
+void client_send_info(Client *client);
 
 void client_sendline(Client *client, char buffer[], int limit);
 void client_recvline(Client *client, char buffer[], int limit);
 
-void client_send_partner(Client *client);
+void client_send_message(Client *client, MSG_TYPE request);
+void client_set_partner(Client *client);
 
 int main(int argc, char *argv[])
 {
@@ -52,8 +53,6 @@ int main(int argc, char *argv[])
 
     // Creating the client struct
     Client *client = client_init(SERVER_PORT);
-    send_client_info(client);
-    get_active_users(client);
 
     printf("[!] ENTER \"exit()\" TO QUIT '(^u^)'\n");
     client_thread_init(client);
@@ -114,18 +113,15 @@ void * client_send(void *pclient)
             continue;
 
         //TESTING
-        else if (strcmp(sendline , "active") == 0)
+        else if (strcmp(sendline , "a") == 0)
         {
-            strcpy(sendline, msg_to_cstr(CLIENT_ACTIVE_USERS));
-            client_sendline(client, sendline, MAXWORD);
-            get_active_users(client);
+            client_send_message(client, ACTIVE_USERS);
             continue;
         }
-        else if (strcmp(sendline, "msg") == 0)
+        else if (strcmp(sendline, "m") == 0)
         {
-            strcpy(sendline, msg_to_cstr(CLIENT_SET_PARTNER));
-            client_sendline(client, sendline, MAXWORD);
-            client_send_partner(client);
+            client_send_message(client, CLIENT_SET_PARTNER);
+            client_set_partner(client);
             continue;
         }
 
@@ -145,10 +141,12 @@ void * client_recv(void *pclient)
     {
         client_recvline(client, recvline, MAXLINE);
 
-        // TODO: have get_active_users func be handled by this thread  
-
         switch(cstr_to_msg(recvline))
         {
+            case ACTIVE_USERS:
+                client_recvline(client, recvline, MAXLINE);
+                print_active_users(recvline);
+                break;
             case ASK:
                 client_recvline(client, recvline, MAXWORD);
                 cstring_input("[?] choice (yes or no): ", choice);
@@ -164,7 +162,7 @@ void * client_recv(void *pclient)
                 printf("[!] PRIVATE CONNECTION ESTABLISHED\n");
                 break;
             default:
-                fprintf(stderr, "client_recv: %s\n", recvline);
+                fprintf(stderr, "\nclient_recv: %s\n", recvline);
                 break;
         }
 
@@ -194,12 +192,14 @@ Client * client_init(int server_port)
                 sizeof(servaddr)) < 0)
         ERROR_HANDLE();
 
+    // Sending client info to server
+    client_send_info(client);
     connected = true;
 
     return client;
 }
 
-void send_client_info(Client *client)
+void client_send_info(Client *client)
 {
     char recvline[MAXLINE];
     char new_name[MAXWORD];
@@ -217,7 +217,7 @@ void send_client_info(Client *client)
     {
         username_is_changed = true;
         do {
-            cstring_input("[?] That name is taken, make another: ", new_name);
+            cstring_input("[!] That name is taken\n[?] New Name: ", new_name);
         } while (strcmp(new_name, name_taken) == 0);
 
         client_sendline(client, new_name, MAXWORD);
@@ -231,47 +231,30 @@ void send_client_info(Client *client)
 
 }
 
-void client_send_partner(Client *client)
+void client_set_partner(Client *client)
 {
     char sendline[MAXWORD+1];
-
-    client_sendline(client, msg_to_cstr(CLIENT_SET_PARTNER), MAXWORD);
-
-    get_active_users(client);
-
     cstring_input("[?] Who do u want to talk with: ", sendline);
-
     client_sendline(client, sendline, MAXWORD);
 }
 
-bool get_active_users(Client *client)
+void print_active_users(char buffer[])
 {
-    char buffer[MAXLINE];
-    bool isempty = true;
     int i = 0;
 
     printf("\n-----------------\n");
     printf("  Active Users\n");
     printf("-----------------\n");
-    client_recvline(client, buffer, MAXLINE);
     while (buffer[i] != '\0')
     {
         printf("%c", buffer[i]);
-        if (buffer[i] == '\n')
-            isempty = false;
         i++;
     }
     printf("\n-----------------\n\n");
-    return isempty;
 }
 
 void client_sendline(Client *client, char buffer[], int limit)
 {
-    /*if (buffer[0] == '\0')*/
-    /*{*/
-        /*fprintf(stderr, "[!] client_sendline: buffer empty\n") ;*/
-        /*exit(1);*/
-    /*}*/
     if (send(client->socket, buffer, limit, 0) < 0)
         ERROR_HANDLE();
 }
@@ -292,3 +275,7 @@ void client_recvline(Client *client, char buffer[], int limit)
     }
 }
 
+void client_send_message(Client *client, MSG_TYPE request)
+{
+    client_sendline(client, msg_to_cstr(request), MAXMSG);
+}
