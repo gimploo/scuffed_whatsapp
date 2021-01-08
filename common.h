@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <math.h>
+#include <poll.h>
 
 #define SERVER_PORT 18000 
 #define SENDLINE 2*4096
@@ -58,8 +59,11 @@ typedef struct client {
     int socket;
     char straddr[IPV4_STRLEN+1];
     bool available;
+
     struct client *partner;
     struct client *next;
+
+    pthread_rwlock_t lock;
 } Client;
 
 void cstring_input(char *message, char buffer[]);

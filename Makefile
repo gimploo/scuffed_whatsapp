@@ -1,5 +1,5 @@
 CC= gcc
-CCFLAGS= -Wall -Wextra -std=c11 -pedantic -g -pthread
+CCFLAGS= -Wall -Wextra -pedantic -g -pthread
 OBJS= linkedlist.o common.o
 BIN= client server
 

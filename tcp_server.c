@@ -47,10 +47,6 @@ int main(void)
         // Request for the client info (rn only username from the client)
         get_client_info(client);
 
-        // TODO: need to find a better way to get over this shitty bug
-        // NOTE: the bug is the client recieves Username registered message
-        //       along with active user buffer at the same time.
-        sleep(1);
         send_active_users(client);
 
         // Creates a server recv thread connection
@@ -190,6 +186,7 @@ void send_active_users(Client *client)
     }
     */
 
+    pthread_rwlock_rdlock(&client->lock);
     while (link1)
     {
         k = j = 0;
@@ -201,6 +198,7 @@ void send_active_users(Client *client)
         link1 = link1->next;
     }
     buffer[i-1]= '\0';
+    pthread_rwlock_unlock(&client->lock);
 
     printf("send_active_users: sending active users to %s\n", client->name);
 
@@ -232,10 +230,12 @@ void * server_recv(void *pclient)
                 Client *link2 = ll_head;
                 char message[MAXLINE];
                 snprintf(message, MAXLINE, "[!] %s left server\n", left_client);
+                pthread_rwlock_rdlock(&client->lock);
                 while (link2) {
                     server_sendline(link2, message, strlen(message));
                     link2 = link2->next;
                 }
+                pthread_rwlock_unlock(&client->lock);
                 return NULL;
             } break;
         }
@@ -306,7 +306,9 @@ Client * get_client_from_list(char *name)
     while (node)
     {
         if (strcmp(node->name, name) == 0)
+        {
             return node;
+        }
         node = node->next;
     }
     return NULL;
@@ -322,8 +324,7 @@ void client_get_partner(Client *client)
 
     server_recvline( client, recvline, MAXWORD );
 
-    if ((partner = get_client_from_list( recvline )) != NULL && 
-            strcmp(recvline, client->name) != 0)
+    if ((partner = get_client_from_list( recvline )) != NULL)
     {
         if ( partner->available == true )
         {
@@ -340,12 +341,12 @@ void client_get_partner(Client *client)
                 /*fprintf(stderr, "client_select_partner: partner == false\n");*/
 
                 server_sendline( client, msg_to_cstr( WAIT ), MAXWORD );
-                server_sendline( partner, msg_to_cstr( ASK ), MAXWORD );
 
                 snprintf(sendline, SENDLINE, 
                         "%s wants to talk to you\n", client->name);
-
                 server_sendline( partner, sendline, SENDLINE);
+
+                server_sendline(partner, msg_to_cstr(ASK), MAXWORD);
                 server_recvline( partner, recvline, SENDLINE);
 
                 if (strcmp(recvline, "yes") == 0)
@@ -359,6 +360,7 @@ void client_get_partner(Client *client)
                     }
                     snprintf(sendline, SENDLINE, 
                             "%s is talking to you\n", partner->name);
+                    server_sendline( client, msg_to_cstr(CLIENT_RECIEVE), SENDLINE);
                     server_sendline( client, sendline, SENDLINE);
                 }
                 else 
@@ -373,13 +375,11 @@ void client_get_partner(Client *client)
         else 
         {
             fprintf(stderr, "client_select_partner: partner unavailable\n");
-            server_sendline(client, msg_to_cstr(CLIENT_UNAVAILABLE), MAXWORD);
         }
     }
     else 
     {
         fprintf(stderr, "client_select_partner: partner not found\n");
-        server_sendline( client, msg_to_cstr( CLIENT_NOT_FOUND ), MAXWORD );
     }
 
 }
