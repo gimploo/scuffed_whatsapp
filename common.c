@@ -19,6 +19,7 @@ char * msg_to_cstr(MSG_TYPE msg)
         case WAIT:                  return "WAIT";
         case ASK:                   return "ASK";
         case ACTIVE_USERS:          return "ACTIVE_USERS";
+        case DUMB_ASS:              return "DUMB_ASS";
         case CLIENT_UNAVAILABLE:    return "CLIENT_UNAVAILABLE";
         case CLIENT_NOT_FOUND:      return "CLIENT_NOT_FOUND";
         case CLIENT_SET_PARTNER:    return "CLIENT_SET_PARTNER";
@@ -40,6 +41,8 @@ MSG_TYPE cstr_to_msg(char *cstring)
         return ASK;
     else if (strcmp(cstring, "CLIENT_SET_PARTNER") == 0)
         return CLIENT_SET_PARTNER;
+    else if (strcmp(cstring, "DUMB_ASS") == 0)
+        return DUMB_ASS;
     else if (strcmp(cstring, "ACTIVE_USERS") == 0)
         return ACTIVE_USERS;
     else if (strcmp(cstring, "CLIENT_REGISTERED") == 0)

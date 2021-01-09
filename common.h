@@ -51,7 +51,8 @@ typedef enum {
     CLIENT_SET_PARTNER,
     CLIENT_USERNAME_TAKEN,
     CLIENT_REGISTERED,
-    INVALID
+    INVALID,
+    DUMB_ASS
 } MSG_TYPE;
 
 typedef struct client {

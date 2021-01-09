@@ -18,7 +18,7 @@ void client_sendline(Client *client, char buffer[], int limit);
 void client_recvline(Client *client, char buffer[], int limit);
 
 void client_send_message(Client *client, MSG_TYPE request);
-void client_set_partner(Client *client);
+void client_choose_partner(Client *client);
 
 int main(int argc, char *argv[])
 {
@@ -121,7 +121,7 @@ void * client_send(void *pclient)
         else if (strcmp(sendline, "m") == 0)
         {
             client_send_message(client, CLIENT_SET_PARTNER);
-            client_set_partner(client);
+            client_choose_partner(client);
             continue;
         }
 
@@ -148,7 +148,6 @@ void * client_recv(void *pclient)
                 print_active_users(recvline);
                 break;
             case ASK:
-                client_recvline(client, recvline, MAXWORD);
                 cstring_input("[?] choice (yes or no): ", choice);
                 client_sendline(client, choice, 4);
                 client_recvline(client, recvline, MAXWORD);
@@ -157,12 +156,21 @@ void * client_recv(void *pclient)
                 printf("[!] Waiting ....\n");
                 client_recvline(client, recvline, MAXWORD);
                 break;
+            case CLIENT_UNAVAILABLE:
+                fprintf(stderr, "[!] Client Unavailable\n");
+                break;
             case SUCCESS:
                 client->available = false;
                 printf("[!] PRIVATE CONNECTION ESTABLISHED\n");
                 break;
+            case CLIENT_NOT_FOUND:
+                fprintf(stderr, "[!] Client not found\n");
+                break;
+            case DUMB_ASS:
+                fprintf(stderr, "[!] You cant talk to yourself\n");
+                break;
             default:
-                fprintf(stderr, "\nclient_recv: %s\n", recvline);
+                printf("\n%s\n", recvline);
                 break;
         }
 
@@ -231,7 +239,7 @@ void client_send_info(Client *client)
 
 }
 
-void client_set_partner(Client *client)
+void client_choose_partner(Client *client)
 {
     char sendline[MAXWORD+1];
     cstring_input("[?] Who do u want to talk with: ", sendline);

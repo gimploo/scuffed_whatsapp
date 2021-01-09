@@ -1,6 +1,15 @@
 #include "common.h"
 #include "linkedlist.h"
 
+typedef struct {
+    struct client *client1;
+    struct client *client2;
+    volatile bool connected;
+    pthread_mutex_t lock;
+} Client_Pair;
+pthread_mutex_t client2client_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t client2client_cond = PTHREAD_COND_INITIALIZER;
+
 pthread_mutex_t lock_ll = PTHREAD_MUTEX_INITIALIZER;
 uint32_t total_clients = 0;
 Client *ll_head = NULL;
@@ -17,11 +26,13 @@ void server_send_message(Client *client, MSG_TYPE request);
 
 // Thread specific functions
 void * server_recv(void *client);
+void *client_pair_client1_handler(void *pclient_pair);
+void *client_pair_client2_handler(void *pclient_pair);
 
 // Client
 Client * client_create_node(int socket, char *addr);
+void client_to_client_connection(Client *client1);
 void client_get_info(Client *this_client);
-void client_get_partner( Client *client );
     
 // miscellaneous
 void print_active_users(Client *head);
@@ -100,11 +111,11 @@ Client * client_create_node(int socket, char addr[])
     strcpy(client->straddr , addr);
     memset(client->name, 0, MAXWORD);
 
-    // Appends new client to the linked list DS 
-    server_add_client(client);
-
     // Request for the client info (rn only username from the client)
     client_get_info(client);
+
+    // Appends new client to the linked list DS 
+    server_add_client(client);
 
     return client;
 }
@@ -240,7 +251,11 @@ void * server_recv(void *pclient)
                 server_send_message(client, CLIENT_REGISTERED);
                 break;
              case CLIENT_SET_PARTNER:
-                client_get_partner(client);
+                pthread_mutex_lock(&client2client_lock);
+                client_to_client_connection(client);
+                while (!client->available)
+                    pthread_cond_wait(&client2client_cond, &client2client_lock);
+                pthread_mutex_unlock(&client2client_lock);
                 break;
              default:
                 fprintf(stderr, "server_request: %s\n", recvline);
@@ -255,7 +270,7 @@ int server_sendline(Client *client, char buffer[], size_t limit)
     if (buffer[0] == '\0')
     {
         fprintf(stderr, "[!] server_sendline: buffer empty\n") ;
-        exit(1);
+        
     }
     if (send(client->socket, buffer, limit, 0) < 0)
     {
@@ -301,69 +316,89 @@ Client * client_get_by_name_from_list(char *name)
     return NULL;
 }
 
-void client_get_partner(Client *client)
+void client_to_client_connection(Client *client1)
 {
-    char recvline[SENDLINE];
-    char sendline[SENDLINE];
-    Client *partner = NULL;
+   char recvline[MAXWORD+1];
+   server_recvline(client1, recvline, MAXWORD);
+   Client *client2 = client_get_by_name_from_list(recvline);
+   if (client2 == NULL)
+   {
+       fprintf(stderr, 
+               "client_to_client_connection: client choose invalid client\n");
+       server_send_message(client1, CLIENT_NOT_FOUND);
+       return ;
+   } 
+   else if (client1 == client2)
+   {
+       fprintf(stderr, 
+               "client_to_client_connection: client choose him/her self\n");
+       server_send_message(client1, DUMB_ASS);
+       return ;
+   }
+   server_send_message(client1, SUCCESS);
+   server_send_message(client2, SUCCESS);
+   client1->available = client2->available = false;
 
-    server_recvline( client, recvline, MAXWORD );
+   Client_Pair clients = {client1, client2, true, PTHREAD_MUTEX_INITIALIZER};
 
-    if ((partner = client_get_by_name_from_list( recvline )) != NULL)
-    {
-        if ( partner->available == true )
-        {
-            if ( partner->partner == client)
-            {
-                client->partner = partner;
-                client->available = false;
-                server_send_message(client, SUCCESS);
-                server_send_message(client->partner, SUCCESS);
-            }
-            else 
-            {
-                server_send_message(client, WAIT);
+   pthread_t tid1;
+   pthread_t tid2;
 
-                snprintf(sendline, SENDLINE, 
-                        "%s wants to talk to you\n", client->name);
-                server_sendline( partner, sendline, SENDLINE);
+   pthread_create(&tid1, NULL, client_pair_client1_handler, &clients);
+   pthread_create(&tid2, NULL, client_pair_client2_handler, &clients);
 
-                server_send_message(client, ASK);
-                server_recvline( partner, recvline, SENDLINE);
-
-                if (strcmp(recvline, "yes") == 0)
-                {
-                    Client *partners_partner = partner->partner;
-                    partners_partner->partner = client;
-                    if (partners_partner != NULL)
-                    {
-                        partners_partner->available = true;
-                        partners_partner->partner = NULL;
-                    }
-                    snprintf(sendline, SENDLINE, 
-                            "%s is talking to you\n", partner->name);
-                    server_sendline( client, sendline, SENDLINE);
-                }
-                else 
-                {
-                    snprintf(sendline, SENDLINE, 
-                            "%s is busy\n", partner->name);
-                    server_sendline( client, sendline, SENDLINE);
-
-                }
-            }
-        }
-        else 
-        {
-            fprintf(stderr, "client_select_partner: partner unavailable\n");
-        }
-    }
-    else 
-    {
-        fprintf(stderr, "client_select_partner: partner not found\n");
-    }
+   pthread_join(tid1, NULL);
+   pthread_cond_signal(&client2client_cond);
 
 }
+
+void *client_pair_client2_handler(void *pclient_pair)
+{
+    char recvline[MAXLINE+1];
+    Client_Pair *clients = (Client_Pair *)pclient_pair;
+    while (clients->connected)
+    {
+        switch(recv(clients->client2->socket, recvline, MAXLINE, 0 ))
+        {
+            case -1:
+                fprintf(stderr, "client2 recv error\n");
+                continue;
+            case 0:
+                fprintf(stderr, "client2 disconnected\n");
+                pthread_mutex_lock(&clients->lock);
+                clients->connected = false;
+                pthread_mutex_unlock(&clients->lock);
+                return NULL;
+        }
+        if (send(clients->client1->socket, recvline, MAXLINE, 0) < 0)
+            fprintf(stderr, "client1 send error\n");
+    }
+    return NULL;
+}
+void *client_pair_client1_handler(void *pclient_pair)
+{
+    char recvline[MAXLINE+1];
+    Client_Pair *clients = (Client_Pair *)pclient_pair;
+    while(clients->connected) 
+    {
+        switch(recv(clients->client1->socket, recvline, MAXLINE, 0 ))
+        {
+            case -1:
+                fprintf(stderr, "client1 recv error\n");
+                continue;
+            case 0:
+                fprintf(stderr, "client1 disconnected\n");
+                pthread_mutex_lock(&clients->lock);
+                clients->connected = false;
+                pthread_mutex_unlock(&clients->lock);
+                return NULL;
+        }
+        if (send(clients->client2->socket, recvline, MAXLINE, 0) < 0)
+            fprintf(stderr, "client2 send error\n");
+    }
+    return NULL;
+}
+
 
 void server_add_client(Client *client)
 {
