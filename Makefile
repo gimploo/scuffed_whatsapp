@@ -12,10 +12,10 @@ server: tcp_server.c $(OBJS)
 	$(CC) $(CCFLAGS) -o server tcp_server.c $(OBJS)
 
 linkedlist.o: linkedlist.c
-	$(CC) -c linkedlist.c
+	$(CC) $(CCFLAGS) -c linkedlist.c
 
 common.o: common.c
-	$(CC) -c common.c
+	$(CC) $(CCFLAGS) -c common.c
 
 clean: 
 	rm $(BIN) $(OBJS) 

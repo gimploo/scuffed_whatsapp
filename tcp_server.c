@@ -168,20 +168,20 @@ int server_init(short port, int backlog)
 
 void print_active_users(List *list)
 {
-    Client *head = list->head;
+    Client *tmp = list->head;
     printf("\n-----------------\n");
     printf("  Active Users\n");
     printf("-----------------\n");
-    if (head == NULL)
+    if (tmp == NULL)
         printf("(~ o ~) . z Z)\n");
     else
     {
         int si = 1;
         pthread_rwlock_rdlock(&list->lock);
-        while (head)
+        while (tmp)
         {
-            printf("%i. %s\n", si++, head->name);
-            head = head->next;
+            printf("%i. %s\n", si++, tmp->name);
+            tmp = tmp->next;
         }
         pthread_rwlock_unlock(&list->lock);
     }
@@ -195,7 +195,7 @@ void send_active_users(Client *client)
     Client *link1 = list.head;
     int j, k, i = 0;
     
-    pthread_rwlock_rdlock(&client->lock);
+    pthread_rwlock_rdlock(&list.lock);
     while (link1)
     {
         k = j = 0;
@@ -207,7 +207,7 @@ void send_active_users(Client *client)
         link1 = link1->next;
     }
     buffer[i-1]= '\0';
-    pthread_rwlock_unlock(&client->lock);
+    pthread_rwlock_unlock(&list.lock);
 
     server_sendline(client, buffer, MAXLINE);
 }
@@ -313,6 +313,7 @@ void client_to_client_connection(Client *client)
 {
    char recvline[MAXWORD+1];
    char sendline[MAXLINE+1];
+
    server_recvline(client, recvline, MAXWORD);
    Client *other_client = client_get_by_name_from_list(recvline);
 
@@ -320,14 +321,14 @@ void client_to_client_connection(Client *client)
    if (other_client == NULL)
    {
        fprintf(stderr, 
-               "client_to_client_connection: client choose invalid client");
+               "client_to_client_connection: client choose invalid client\n");
        server_send_message(client, CLIENT_NOT_FOUND);
        return ;
    } 
    else if (client == other_client)
    {
        fprintf(stderr, 
-               "client_to_client_connection: client choose him/her self");
+               "client_to_client_connection: client choose him/her self\n");
        server_send_message(client, DUMB_ASS);
        return ;
    }
@@ -353,6 +354,11 @@ void client_to_client_connection(Client *client)
        }
        
    }
+   else if (other_client->partner == client)
+   {
+       snprintf(sendline, MAXLINE, "%s is talking... \n", other_client->name);
+       server_sendline(client, sendline, MAXLINE);
+   }
 
    pthread_rwlock_wrlock(&list.lock);
    client->available = other_client->available = false;
@@ -373,6 +379,7 @@ void client_to_client_connection(Client *client)
 
 void *client_pair_chat_handler(void *pclient_pair)
 {
+    printf("[!] Entered chat mode\n");
     char recvline[MAXLINE+1];
     char sendline[MAXSND+1];
     Client_Pair *clients = (Client_Pair *)pclient_pair;
@@ -413,7 +420,12 @@ void server_remove_client(Client *client)
 
     pthread_rwlock_wrlock(&list.lock);
     list.count--;
-    if (client->partner != NULL) client->partner->available = true;
+    if (client->partner != NULL) 
+    {
+        client->partner->available = true;
+        if (client->partner->partner == client)
+            client->partner->partner = NULL;
+    }
     switch (ll_deletion(&list.head, client))
     {
         case 0:

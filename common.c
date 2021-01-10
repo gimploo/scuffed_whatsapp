@@ -4,8 +4,6 @@ void cstring_input(char *message, char buffer[])
 {
     if (message != NULL)
         printf("%s", message);
-    char chr;
-    int i = 0;
     fgets(buffer, MAXLINE, stdin);
     buffer[strlen(buffer)-1] = '\0';
 }

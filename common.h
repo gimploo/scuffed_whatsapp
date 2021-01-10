@@ -63,7 +63,6 @@ typedef struct client {
     struct client *partner;
     struct client *next;
 
-    pthread_rwlock_t lock;
 } Client;
 
 // Takes input from the user and stores in buffer[]

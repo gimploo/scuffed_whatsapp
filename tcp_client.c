@@ -135,7 +135,7 @@ void * client_recv(void *pclient)
 {
     Client *client = (Client *)pclient;
     char recvline[MAXLINE];
-    char choice[4];
+    char choice[7];
 
     while (connected)
     {
@@ -153,8 +153,7 @@ void * client_recv(void *pclient)
                 break;
             case ASK:
                 cstring_input("[?] choice (yes or no): ", choice);
-                client_sendline(client, choice, 4);
-                client_recvline(client, recvline, MAXWORD);
+                client_sendline(client, choice, 5);
                 break;
             case WAIT:
                 printf("[!] Waiting ....\n");
@@ -248,16 +247,10 @@ void client_choose_partner(Client *client)
 
 void print_active_users(char buffer[])
 {
-    int i = 0;
-
     printf("\n-----------------\n");
     printf("  Active Users\n");
     printf("-----------------\n");
-    while (buffer[i] != '\0')
-    {
-        printf("%c", buffer[i]);
-        i++;
-    }
+    printf("%s", buffer);
     printf("\n-----------------\n\n");
 }
 
