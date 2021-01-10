@@ -4,39 +4,37 @@
 typedef struct {
     struct client *client1;
     struct client *client2;
-    volatile bool connected;
-    pthread_mutex_t lock;
+    volatile bool active;
+    pthread_rwlock_t lock;
 } Client_Pair;
-pthread_mutex_t client2client_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t client2client_cond = PTHREAD_COND_INITIALIZER;
 
-pthread_mutex_t lock_ll = PTHREAD_MUTEX_INITIALIZER;
-uint32_t total_clients = 0;
-Client *ll_head = NULL;
+List list = {
+    .head = NULL,
+    .count = 0,
+    .lock = PTHREAD_RWLOCK_INITIALIZER
+};
 
 // Server 
 int server_init(short port, int backlog);
-int server_sendline(Client *client, char buffer[], size_t limit);
-int server_recvline(Client *client, char buffer[], size_t limit);
+int server_sendline(Client *, char buffer[], size_t limit);
+int server_recvline(Client *, char buffer[], size_t limit);
 Client * accept_connection(int server_socket);
-void server_remove_client(Client *client);
-void server_add_client(Client *client);
-void server_service_handler(Client *client, char recvline[], MSG_TYPE msg);
-void server_send_message(Client *client, MSG_TYPE request);
+void server_remove_client(Client *);
+void server_add_client(Client *);
+void server_send_message(Client *, MSG_TYPE request);
 
 // Thread specific functions
 void * server_recv(void *client);
-void *client_pair_client1_handler(void *pclient_pair);
-void *client_pair_client2_handler(void *pclient_pair);
+void *client_pair_chat_handler(void *pclient_pair);
 
 // Client
 Client * client_create_node(int socket, char *addr);
-void client_to_client_connection(Client *client1);
-void client_get_info(Client *this_client);
+void client_to_client_connection(Client *);
+void client_get_info(Client *);
     
 // miscellaneous
-void print_active_users(Client *head);
-void send_active_users(Client *client);
+void print_active_users(List *list);
+void send_active_users(Client *);
 int does_user_exist(char *name);
 Client * client_get_by_name_from_list(char *name);
 
@@ -51,7 +49,7 @@ int main(void)
         printf("\n[*] Listening @ %d ...\n", SERVER_PORT);
 
         // prints all acitve users in a menu
-        print_active_users(ll_head);
+        print_active_users(&list);
 
         // Accepts incomming connection
         Client *client = accept_connection(server_socket);
@@ -63,7 +61,7 @@ int main(void)
     }
 
     // Freeing the client list
-    ll_free(ll_head);
+    ll_free(list.head);
 
 }
 
@@ -89,13 +87,18 @@ void client_get_info(Client *client)
 
 int does_user_exist(char *name)
 {
-    Client *tmp = ll_head;
+    pthread_rwlock_rdlock(&list.lock);
+    Client *tmp = list.head;
     while (tmp)
     {
         if (strcmp(tmp->name, name) == 0)
+        {
+            pthread_rwlock_unlock(&list.lock);
             return 0;
+        }
         tmp = tmp->next;
     }
+    pthread_rwlock_unlock(&list.lock);
     return 1;
 }
 
@@ -163,8 +166,9 @@ int server_init(short port, int backlog)
     return server_socket;
 }
 
-void print_active_users(Client *head)
+void print_active_users(List *list)
 {
+    Client *head = list->head;
     printf("\n-----------------\n");
     printf("  Active Users\n");
     printf("-----------------\n");
@@ -173,11 +177,13 @@ void print_active_users(Client *head)
     else
     {
         int si = 1;
+        pthread_rwlock_rdlock(&list->lock);
         while (head)
         {
             printf("%i. %s\n", si++, head->name);
             head = head->next;
         }
+        pthread_rwlock_unlock(&list->lock);
     }
     printf("-----------------\n\n");
 
@@ -186,17 +192,9 @@ void print_active_users(Client *head)
 void send_active_users(Client *client)
 {
     char buffer[MAXLINE];
-    Client *link1 = ll_head;
+    Client *link1 = list.head;
     int j, k, i = 0;
     
-    if (ll_head == NULL && total_clients == 1)
-    {
-        strcpy(buffer,"(~ o ~) . z Z)");
-        server_sendline(client, buffer, MAXLINE);
-        return ;
-    }
-    
-
     pthread_rwlock_rdlock(&client->lock);
     while (link1)
     {
@@ -211,8 +209,6 @@ void send_active_users(Client *client)
     buffer[i-1]= '\0';
     pthread_rwlock_unlock(&client->lock);
 
-    /*printf("send_active_users: sending active users to %s\n", client->name);*/
-    printf("----\nOUTPUT:\n%s\n---\n", buffer);
     server_sendline(client, buffer, MAXLINE);
 }
 
@@ -251,11 +247,7 @@ void * server_recv(void *pclient)
                 server_send_message(client, CLIENT_REGISTERED);
                 break;
              case CLIENT_SET_PARTNER:
-                pthread_mutex_lock(&client2client_lock);
                 client_to_client_connection(client);
-                while (!client->available)
-                    pthread_cond_wait(&client2client_cond, &client2client_lock);
-                pthread_mutex_unlock(&client2client_lock);
                 break;
              default:
                 fprintf(stderr, "server_request: %s\n", recvline);
@@ -274,6 +266,7 @@ int server_sendline(Client *client, char buffer[], size_t limit)
     }
     if (send(client->socket, buffer, limit, 0) < 0)
     {
+        fprintf(stderr, "server_sendline: error while sending\n");
         return -1;
     }
     return 0;
@@ -304,7 +297,7 @@ void server_send_message(Client *client, MSG_TYPE request)
 }
 Client * client_get_by_name_from_list(char *name)
 {
-    Client *node = ll_head;
+    Client *node = list.head;
     while (node)
     {
         if (strcmp(node->name, name) == 0)
@@ -316,70 +309,74 @@ Client * client_get_by_name_from_list(char *name)
     return NULL;
 }
 
-void client_to_client_connection(Client *client1)
+void client_to_client_connection(Client *client)
 {
    char recvline[MAXWORD+1];
-   server_recvline(client1, recvline, MAXWORD);
-   Client *client2 = client_get_by_name_from_list(recvline);
-   if (client2 == NULL)
+   char sendline[MAXLINE+1];
+   server_recvline(client, recvline, MAXWORD);
+   Client *other_client = client_get_by_name_from_list(recvline);
+
+   // Checking if the client you choose is legit
+   if (other_client == NULL)
    {
        fprintf(stderr, 
-               "client_to_client_connection: client choose invalid client\n");
-       server_send_message(client1, CLIENT_NOT_FOUND);
+               "client_to_client_connection: client choose invalid client");
+       server_send_message(client, CLIENT_NOT_FOUND);
        return ;
    } 
-   else if (client1 == client2)
+   else if (client == other_client)
    {
        fprintf(stderr, 
-               "client_to_client_connection: client choose him/her self\n");
-       server_send_message(client1, DUMB_ASS);
+               "client_to_client_connection: client choose him/her self");
+       server_send_message(client, DUMB_ASS);
        return ;
    }
-   server_send_message(client1, SUCCESS);
-   server_send_message(client2, SUCCESS);
-   client1->available = client2->available = false;
 
-   Client_Pair clients = {client1, client2, true, PTHREAD_MUTEX_INITIALIZER};
+   // Checking whether the other client wanted to talk to you
+   if (other_client->partner != client)
+   {
+       snprintf(sendline, MAXLINE, "%s wants to talk to you",client->name);
+       server_sendline(other_client, sendline, MAXLINE);
+       server_send_message(other_client, ASK);
+       server_recvline(other_client, recvline, 5);
+       if (strcmp(recvline, "yes") == 0)
+       {
+           other_client->partner = client;
+           client->partner = other_client;
+           server_send_message(other_client, CLIENT_SET_PARTNER);
+       }
+       else 
+       {
+           snprintf(sendline, MAXLINE, "%s is busy", other_client->name);
+           server_sendline(client, sendline, MAXLINE);
+           return ;
+       }
+       
+   }
+
+   pthread_rwlock_wrlock(&list.lock);
+   client->available = other_client->available = false;
+   pthread_rwlock_unlock(&list.lock);
+
+   Client_Pair clients = {
+       .client1 = client, 
+       .client2 = other_client, 
+       .active = true, 
+       .lock = PTHREAD_RWLOCK_INITIALIZER
+   };
 
    pthread_t tid1;
-   pthread_t tid2;
-
-   pthread_create(&tid1, NULL, client_pair_client1_handler, &clients);
-   pthread_create(&tid2, NULL, client_pair_client2_handler, &clients);
-
+   pthread_create(&tid1, NULL, client_pair_chat_handler, &clients);
    pthread_join(tid1, NULL);
-   pthread_cond_signal(&client2client_cond);
 
 }
 
-void *client_pair_client2_handler(void *pclient_pair)
+void *client_pair_chat_handler(void *pclient_pair)
 {
     char recvline[MAXLINE+1];
+    char sendline[MAXSND+1];
     Client_Pair *clients = (Client_Pair *)pclient_pair;
-    while (clients->connected)
-    {
-        switch(recv(clients->client2->socket, recvline, MAXLINE, 0 ))
-        {
-            case -1:
-                fprintf(stderr, "client2 recv error\n");
-                continue;
-            case 0:
-                fprintf(stderr, "client2 disconnected\n");
-                pthread_mutex_lock(&clients->lock);
-                clients->connected = false;
-                pthread_mutex_unlock(&clients->lock);
-                return NULL;
-        }
-        if (send(clients->client1->socket, recvline, MAXLINE, 0) < 0)
-            fprintf(stderr, "client1 send error\n");
-    }
-    return NULL;
-}
-void *client_pair_client1_handler(void *pclient_pair)
-{
-    char recvline[MAXLINE+1];
-    Client_Pair *clients = (Client_Pair *)pclient_pair;
-    while(clients->connected) 
+    while (clients->active)
     {
         switch(recv(clients->client1->socket, recvline, MAXLINE, 0 ))
         {
@@ -388,12 +385,14 @@ void *client_pair_client1_handler(void *pclient_pair)
                 continue;
             case 0:
                 fprintf(stderr, "client1 disconnected\n");
-                pthread_mutex_lock(&clients->lock);
-                clients->connected = false;
-                pthread_mutex_unlock(&clients->lock);
+
+                pthread_rwlock_wrlock(&clients->lock);
+                clients->active = false;
+                pthread_rwlock_unlock(&clients->lock);
                 return NULL;
         }
-        if (send(clients->client2->socket, recvline, MAXLINE, 0) < 0)
+        snprintf(sendline, MAXSND, "%s: %s", clients->client1->name, recvline);
+        if (send(clients->client2->socket, sendline, strlen(sendline), 0) < 0)
             fprintf(stderr, "client2 send error\n");
     }
     return NULL;
@@ -402,19 +401,20 @@ void *client_pair_client1_handler(void *pclient_pair)
 
 void server_add_client(Client *client)
 {
-    pthread_mutex_lock(&lock_ll);
-    ll_append(&ll_head,client);
-    total_clients++;
-    pthread_mutex_unlock(&lock_ll);
+    pthread_rwlock_wrlock(&list.lock);
+    ll_append(&list.head, client);
+    list.count++;
+    pthread_rwlock_unlock(&list.lock);
 }
 void server_remove_client(Client *client)
 {
     printf("[!] Client (%s) disconnected\n", client->name);
     close(client->socket);
 
-    pthread_mutex_lock(&lock_ll);
-    total_clients--;
-    switch (ll_deletion(&ll_head, client))
+    pthread_rwlock_wrlock(&list.lock);
+    list.count--;
+    if (client->partner != NULL) client->partner->available = true;
+    switch (ll_deletion(&list.head, client))
     {
         case 0:
             fprintf(stderr, "[!] ll_deletion: element deleted\n");
@@ -426,5 +426,6 @@ void server_remove_client(Client *client)
             fprintf(stderr, "[!] ll_deletion: element not found\n");
             break;
     }
-    pthread_mutex_unlock(&lock_ll);
+    pthread_rwlock_unlock(&list.lock);
+
 }

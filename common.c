@@ -6,9 +6,8 @@ void cstring_input(char *message, char buffer[])
         printf("%s", message);
     char chr;
     int i = 0;
-    while ((chr = getchar()) != '\n')
-        buffer[i++] = chr;
-    buffer[i] = '\0';
+    fgets(buffer, MAXLINE, stdin);
+    buffer[strlen(buffer)-1] = '\0';
 }
 
 char * msg_to_cstr(MSG_TYPE msg)

@@ -16,14 +16,13 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <errno.h>
-#include <math.h>
 #include <poll.h>
 
 #define SERVER_PORT 18000 
-#define SENDLINE 2*4096
 #define MAXMSG 25
+#define MAXSND 6144
 #define MAXLINE 4096
-#define MAXWORD 951
+#define MAXWORD 1024
 #define LOCALHOST "127.0.0.1"
 #define IPV4_STRLEN 16
 #define SERVER_BACKLOG 10
@@ -67,9 +66,11 @@ typedef struct client {
     pthread_rwlock_t lock;
 } Client;
 
+// Takes input from the user and stores in buffer[]
 void cstring_input(char *message, char buffer[]);
 
 char * msg_to_cstr(MSG_TYPE msg);
+
 MSG_TYPE cstr_to_msg(char *cstring);
 
 #endif

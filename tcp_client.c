@@ -116,16 +116,16 @@ void * client_send(void *pclient)
         else if (strcmp(sendline , "a") == 0)
         {
             client_send_message(client, ACTIVE_USERS);
-            continue;
         }
         else if (strcmp(sendline, "m") == 0)
         {
             client_send_message(client, CLIENT_SET_PARTNER);
             client_choose_partner(client);
-            continue;
         }
+        else 
+            client_sendline(client, sendline, strlen(sendline));
 
-        client_sendline(client, sendline, strlen(sendline));
+        sleep(1);
 
     }
     return NULL;
@@ -147,6 +147,10 @@ void * client_recv(void *pclient)
                 client_recvline(client, recvline, MAXLINE);
                 print_active_users(recvline);
                 break;
+            case CLIENT_SET_PARTNER:
+                client_send_message(client, CLIENT_SET_PARTNER);
+                client_choose_partner(client);
+                break;
             case ASK:
                 cstring_input("[?] choice (yes or no): ", choice);
                 client_sendline(client, choice, 4);
@@ -158,10 +162,6 @@ void * client_recv(void *pclient)
                 break;
             case CLIENT_UNAVAILABLE:
                 fprintf(stderr, "[!] Client Unavailable\n");
-                break;
-            case SUCCESS:
-                client->available = false;
-                printf("[!] PRIVATE CONNECTION ESTABLISHED\n");
                 break;
             case CLIENT_NOT_FOUND:
                 fprintf(stderr, "[!] Client not found\n");
