@@ -111,6 +111,11 @@ void * client_send(void *pclient)
 
         if (strcmp(sendline, "\n") == 0)
             continue;
+        else if (strcmp(sendline, "cls") == 0)
+        {
+            system("clear");
+            continue;
+        }
 
         //TESTING
         else if (strcmp(sendline , "a") == 0)
@@ -125,8 +130,8 @@ void * client_send(void *pclient)
         else 
             client_sendline(client, sendline, strlen(sendline));
 
-        sleep(1);
-
+        // hackish way for the proc to slow down and not take accidental inputs
+        CLEAR_STDIN();
     }
     return NULL;
 }
@@ -251,7 +256,7 @@ void print_active_users(char buffer[])
     printf("  Active Users\n");
     printf("-----------------\n");
     printf("%s", buffer);
-    printf("\n-----------------\n\n");
+    printf("\n-----------------\n");
 }
 
 void client_sendline(Client *client, char buffer[], int limit)
