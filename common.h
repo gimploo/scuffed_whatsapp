@@ -16,7 +16,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <errno.h>
-#include <poll.h>
+#include <ctype.h>
 
 #define SERVER_PORT 18000 
 #define MAXMSG 25

@@ -152,17 +152,23 @@ void * client_recv(void *pclient)
                 client_recvline(client, recvline, MAXLINE);
                 print_active_users(recvline);
                 break;
+
             case CLIENT_SET_PARTNER:
                 client_send_message(client, CLIENT_SET_PARTNER);
                 client_choose_partner(client);
                 break;
+
             case ASK:
-                cstring_input("[?] choice (yes or no): ", choice);
+                do {
+                    cstring_input("[?] choice (yes or no): ", choice);
+                    for (int i = 0; choice[i]; i++) 
+                        choice[i] = tolower(choice[i]);
+                } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
                 client_sendline(client, choice, 5);
                 break;
+
             case WAIT:
                 printf("[!] Waiting ....\n");
-                client_recvline(client, recvline, MAXWORD);
                 break;
             case CLIENT_UNAVAILABLE:
                 fprintf(stderr, "[!] Client Unavailable\n");

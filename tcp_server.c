@@ -269,6 +269,7 @@ int server_sendline(Client *client, char buffer[], size_t limit)
         fprintf(stderr, "server_sendline: error while sending\n");
         return -1;
     }
+    printf("server_sendline: message sent to %s\n", client->name);
     return 0;
 }
 
@@ -288,6 +289,7 @@ int server_recvline(Client *client, char buffer[], size_t limit)
         server_remove_client(client);
         return -2;
     }
+    printf("server_recvline: message recieved by %s\n", client->name);
     return 0;
 }
 
@@ -295,17 +297,21 @@ void server_send_message(Client *client, MSG_TYPE request)
 {
     server_sendline(client, msg_to_cstr(request), MAXMSG);
 }
+
 Client * client_get_by_name_from_list(char *name)
 {
     Client *node = list.head;
+    pthread_rwlock_rdlock(&list.lock);
     while (node)
     {
         if (strcmp(node->name, name) == 0)
         {
+            pthread_rwlock_unlock(&list.lock);
             return node;
         }
         node = node->next;
     }
+    pthread_rwlock_unlock(&list.lock);
     return NULL;
 }
 
@@ -339,16 +345,18 @@ void client_to_client_connection(Client *client)
        snprintf(sendline, MAXLINE, "%s wants to talk to you",client->name);
        server_sendline(other_client, sendline, MAXLINE);
        server_send_message(other_client, ASK);
+       server_send_message(client, WAIT);
        server_recvline(other_client, recvline, 5);
        if (strcmp(recvline, "yes") == 0)
        {
-           other_client->partner = client;
+           pthread_rwlock_wrlock(&list.lock);
            client->partner = other_client;
+           pthread_rwlock_unlock(&list.lock);
            server_send_message(other_client, CLIENT_SET_PARTNER);
        }
        else 
        {
-           snprintf(sendline, MAXLINE, "%s is busy", other_client->name);
+           snprintf(sendline, MAXLINE, "(%s is busy)", other_client->name);
            server_sendline(client, sendline, MAXLINE);
            return ;
        }
@@ -356,12 +364,15 @@ void client_to_client_connection(Client *client)
    }
    else if (other_client->partner == client)
    {
-       snprintf(sendline, MAXLINE, "%s is talking... \n", other_client->name);
+       snprintf(sendline, MAXLINE, "(%s is talking... )", other_client->name);
        server_sendline(client, sendline, MAXLINE);
+       snprintf(sendline, MAXLINE, "(%s is talking... )", client->name);
+       server_sendline(other_client, sendline, MAXLINE);
    }
+   printf("%s initiated chat mode\n", client->name);
 
    pthread_rwlock_wrlock(&list.lock);
-   client->available = other_client->available = false;
+   client->available = false;
    pthread_rwlock_unlock(&list.lock);
 
    Client_Pair clients = {
@@ -405,7 +416,6 @@ void *client_pair_chat_handler(void *pclient_pair)
     return NULL;
 }
 
-
 void server_add_client(Client *client)
 {
     pthread_rwlock_wrlock(&list.lock);
@@ -413,6 +423,7 @@ void server_add_client(Client *client)
     list.count++;
     pthread_rwlock_unlock(&list.lock);
 }
+
 void server_remove_client(Client *client)
 {
     printf("[!] Client (%s) disconnected\n", client->name);
