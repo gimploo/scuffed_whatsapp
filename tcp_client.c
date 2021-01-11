@@ -1,10 +1,10 @@
 #include "common.h"
 
 volatile bool connected = false;
-pthread_mutex_t lock1;
+pthread_mutex_t lock_connec = PTHREAD_MUTEX_INITIALIZER;
 
-Client *ll_head = NULL;
-Client *ll_tail = NULL;
+pthread_mutex_t lock_pause = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond_pause = PTHREAD_COND_INITIALIZER;
 
 Client * client_init(int server_port);
 void client_thread_init(Client *client);
@@ -101,9 +101,9 @@ void * client_send(void *pclient)
             }
             else
             {
-                pthread_mutex_lock((&lock1));
+                pthread_mutex_lock((&lock_connec));
                 connected = false;
-                pthread_mutex_unlock((&lock1));
+                pthread_mutex_unlock((&lock_connec));
                 return NULL;
             }
             CLEAR_STDIN();
@@ -159,16 +159,19 @@ void * client_recv(void *pclient)
                 break;
 
             case ASK:
+                // TODO: Last stopped here
+                pthread_mutex_lock(&lock_pause);
                 do {
                     cstring_input("[?] choice (yes or no): ", choice);
                     for (int i = 0; choice[i]; i++) 
                         choice[i] = tolower(choice[i]);
                 } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
+                pthread_mutex_unlock(&lock_pause);
                 client_sendline(client, choice, 5);
                 break;
 
             case WAIT:
-                printf("[!] Waiting ....\n");
+                printf("[!] Request sent\n");
                 break;
             case CLIENT_UNAVAILABLE:
                 fprintf(stderr, "[!] Client Unavailable\n");
@@ -277,9 +280,9 @@ void client_recvline(Client *client, char buffer[], int limit)
     switch(recv(client->socket, buffer, limit, 0))
     {
         case 0:
-            pthread_mutex_lock((&lock1));
+            pthread_mutex_lock((&lock_connec));
             connected = false;
-            pthread_mutex_unlock((&lock1));
+            pthread_mutex_unlock((&lock_connec));
             printf("[!] Connection closed by server\n");
             exit(-1);
         case -1:

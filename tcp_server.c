@@ -269,7 +269,6 @@ int server_sendline(Client *client, char buffer[], size_t limit)
         fprintf(stderr, "server_sendline: error while sending\n");
         return -1;
     }
-    printf("server_sendline: message sent to %s\n", client->name);
     return 0;
 }
 
@@ -289,7 +288,6 @@ int server_recvline(Client *client, char buffer[], size_t limit)
         server_remove_client(client);
         return -2;
     }
-    printf("server_recvline: message recieved by %s\n", client->name);
     return 0;
 }
 
@@ -323,7 +321,7 @@ void client_to_client_connection(Client *client)
    server_recvline(client, recvline, MAXWORD);
    Client *other_client = client_get_by_name_from_list(recvline);
 
-   // Checking if the client you choose is legit
+   // Checking if the client choose is legit
    if (other_client == NULL)
    {
        fprintf(stderr, 
@@ -339,7 +337,7 @@ void client_to_client_connection(Client *client)
        return ;
    }
 
-   // Checking whether the other client wanted to talk to you
+   // Checking whether the other client wanted to talk with you
    if (other_client->partner != client)
    {
        snprintf(sendline, MAXLINE, "%s wants to talk to you",client->name);
@@ -351,16 +349,16 @@ void client_to_client_connection(Client *client)
        {
            pthread_rwlock_wrlock(&list.lock);
            client->partner = other_client;
+           other_client->partner = client;
            pthread_rwlock_unlock(&list.lock);
            server_send_message(other_client, CLIENT_SET_PARTNER);
        }
        else 
        {
-           snprintf(sendline, MAXLINE, "(%s is busy)", other_client->name);
+           snprintf(sendline, MAXLINE, "%s declined", other_client->name);
            server_sendline(client, sendline, MAXLINE);
            return ;
        }
-       
    }
    else if (other_client->partner == client)
    {
@@ -375,7 +373,7 @@ void client_to_client_connection(Client *client)
    client->available = false;
    pthread_rwlock_unlock(&list.lock);
 
-   Client_Pair clients = {
+   Client_Pair client_pair_info = {
        .client1 = client, 
        .client2 = other_client, 
        .active = true, 
@@ -383,7 +381,7 @@ void client_to_client_connection(Client *client)
    };
 
    pthread_t tid1;
-   pthread_create(&tid1, NULL, client_pair_chat_handler, &clients);
+   pthread_create(&tid1, NULL, client_pair_chat_handler, &client_pair_info);
    pthread_join(tid1, NULL);
 
 }
