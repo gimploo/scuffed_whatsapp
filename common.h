@@ -43,6 +43,7 @@ typedef enum {
     SUCCESS,
     FAILED,
     WAIT,
+    CONTINUE,
     ASK,
     ACTIVE_USERS,
     CLIENT_UNAVAILABLE,

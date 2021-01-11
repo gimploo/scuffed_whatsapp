@@ -14,6 +14,7 @@ char * msg_to_cstr(MSG_TYPE msg)
         case SUCCESS:               return "SUCCESS";
         case FAILED:                return "FAILED";
         case WAIT:                  return "WAIT";
+        case CONTINUE:              return "CONTINUE";
         case ASK:                   return "ASK";
         case ACTIVE_USERS:          return "ACTIVE_USERS";
         case DUMB_ASS:              return "DUMB_ASS";
@@ -34,6 +35,8 @@ MSG_TYPE cstr_to_msg(char *cstring)
         return FAILED;
     else if (strcmp(cstring, "WAIT") == 0)
         return WAIT;
+    else if (strcmp(cstring, "CONTINUE") == 0)
+        return CONTINUE;
     else if (strcmp(cstring, "ASK") == 0)
         return ASK;
     else if (strcmp(cstring, "CLIENT_SET_PARTNER") == 0)

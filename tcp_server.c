@@ -269,6 +269,9 @@ int server_sendline(Client *client, char buffer[], size_t limit)
         fprintf(stderr, "server_sendline: error while sending\n");
         return -1;
     }
+    printf("\n---------------------\n");
+    printf("* send buffer: %s", buffer);
+    printf("\n---------------------\n");
     return 0;
 }
 
@@ -288,6 +291,9 @@ int server_recvline(Client *client, char buffer[], size_t limit)
         server_remove_client(client);
         return -2;
     }
+    printf("\n---------------------\n");
+    printf("* recv buffer: %s", buffer);
+    printf("\n---------------------\n");
     return 0;
 }
 
@@ -356,6 +362,7 @@ void client_to_client_connection(Client *client)
        else 
        {
            snprintf(sendline, MAXLINE, "%s declined", other_client->name);
+           server_send_message(client, CONTINUE);
            server_sendline(client, sendline, MAXLINE);
            return ;
        }
@@ -364,6 +371,7 @@ void client_to_client_connection(Client *client)
    {
        snprintf(sendline, MAXLINE, "(%s is talking... )", other_client->name);
        server_sendline(client, sendline, MAXLINE);
+       server_send_message(other_client, CONTINUE);
        snprintf(sendline, MAXLINE, "(%s is talking... )", client->name);
        server_sendline(other_client, sendline, MAXLINE);
    }
@@ -388,7 +396,6 @@ void client_to_client_connection(Client *client)
 
 void *client_pair_chat_handler(void *pclient_pair)
 {
-    printf("[!] Entered chat mode\n");
     char recvline[MAXLINE+1];
     char sendline[MAXSND+1];
     Client_Pair *clients = (Client_Pair *)pclient_pair;
@@ -397,18 +404,15 @@ void *client_pair_chat_handler(void *pclient_pair)
         switch(recv(clients->client1->socket, recvline, MAXLINE, 0 ))
         {
             case -1:
-                fprintf(stderr, "client1 recv error\n");
                 continue;
             case 0:
-                fprintf(stderr, "client1 disconnected\n");
-
                 pthread_rwlock_wrlock(&clients->lock);
                 clients->active = false;
                 pthread_rwlock_unlock(&clients->lock);
                 return NULL;
         }
         snprintf(sendline, MAXSND, "%s: %s", clients->client1->name, recvline);
-        if (send(clients->client2->socket, sendline, strlen(sendline), 0) < 0)
+        if (send(clients->client2->socket, sendline, MAXLINE, 0) < 0)
             fprintf(stderr, "client2 send error\n");
     }
     return NULL;

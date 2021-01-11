@@ -5,6 +5,7 @@ pthread_mutex_t lock_connec = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_mutex_t lock_pause = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond_pause = PTHREAD_COND_INITIALIZER;
+volatile bool pause_other_thread = false;
 
 Client * client_init(int server_port);
 void client_thread_init(Client *client);
@@ -84,12 +85,24 @@ void client_thread_init(Client *client)
 void * client_send(void *pclient)
 {
     Client *client = (Client *)pclient;
+    char pre_mssg[MAXLINE];
     char sendline[MAXLINE];
     char chr;
+
+    snprintf(pre_mssg, MAXLINE, "%s : ", client->name);
+
     while (connected)
     {
-        printf("%s : ", client->name);
-        cstring_input(NULL, sendline);
+        pthread_mutex_lock(&lock_pause);
+        while (pause_other_thread)
+        {
+            pthread_cond_wait(&cond_pause, &lock_pause);
+            pause_other_thread = false;
+        }
+
+        do {
+            cstring_input(pre_mssg, sendline);
+        } while (strcmp(sendline, "\n") == 0);
 
         if (strcmp(sendline, "exit()") == 0)
         {
@@ -101,22 +114,23 @@ void * client_send(void *pclient)
             }
             else
             {
-                pthread_mutex_lock((&lock_connec));
+                pthread_mutex_lock(&lock_connec);
                 connected = false;
-                pthread_mutex_unlock((&lock_connec));
+                pthread_mutex_unlock(&lock_connec);
                 return NULL;
             }
             CLEAR_STDIN();
         }
 
-        if (strcmp(sendline, "\n") == 0)
-            continue;
+        /*if (strcmp(sendline, "\n") == 0)*/
+        /*{*/
+            /*pthread_mutex_unlock(&lock_pause);*/
+            /*continue;*/
+        /*}*/
         else if (strcmp(sendline, "cls") == 0)
         {
             system("clear");
-            continue;
         }
-
         //TESTING
         else if (strcmp(sendline , "a") == 0)
         {
@@ -128,10 +142,13 @@ void * client_send(void *pclient)
             client_choose_partner(client);
         }
         else 
-            client_sendline(client, sendline, strlen(sendline));
+            client_sendline(client, sendline, MAXLINE);
 
-        // hackish way for the proc to slow down and not take accidental inputs
-        CLEAR_STDIN();
+        pthread_mutex_unlock(&lock_pause);
+        // FIXME:
+        // hackish way for the proc to slow down and not take 
+        // concurrent or accidental inputs
+        /*CLEAR_STDIN();*/
     }
     return NULL;
 }
@@ -159,20 +176,37 @@ void * client_recv(void *pclient)
                 break;
 
             case ASK:
-                // TODO: Last stopped here
+                // NOTE:
+                // A solution i found that tried to resolve the confict that
+                // happened btw the other threads cstring func with the one here
                 pthread_mutex_lock(&lock_pause);
+                pause_other_thread = true;
+                pthread_mutex_unlock(&lock_pause);
+               
+                // Error handling user input
                 do {
                     cstring_input("[?] choice (yes or no): ", choice);
                     for (int i = 0; choice[i]; i++) 
                         choice[i] = tolower(choice[i]);
-                } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
-                pthread_mutex_unlock(&lock_pause);
+                } 
+                while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
+
+                pthread_cond_signal(&cond_pause);
                 client_sendline(client, choice, 5);
                 break;
 
             case WAIT:
-                printf("[!] Request sent\n");
+                printf("[!] Waiting ...\n");
+                pthread_mutex_lock(&lock_pause);
+                pause_other_thread = true;
+                pthread_mutex_unlock(&lock_pause);
                 break;
+
+            case CONTINUE:
+                printf("[!] Continue\n");
+                pthread_cond_signal(&cond_pause);
+                break;
+
             case CLIENT_UNAVAILABLE:
                 fprintf(stderr, "[!] Client Unavailable\n");
                 break;
@@ -272,6 +306,9 @@ void client_sendline(Client *client, char buffer[], int limit)
 {
     if (send(client->socket, buffer, limit, 0) < 0)
         ERROR_HANDLE();
+    printf("\n---------------------\n");
+    printf("* send buffer: %s", buffer);
+    printf("\n---------------------\n");
 }
 
 void client_recvline(Client *client, char buffer[], int limit)
@@ -280,14 +317,17 @@ void client_recvline(Client *client, char buffer[], int limit)
     switch(recv(client->socket, buffer, limit, 0))
     {
         case 0:
-            pthread_mutex_lock((&lock_connec));
+            pthread_mutex_lock(&lock_connec);
             connected = false;
-            pthread_mutex_unlock((&lock_connec));
+            pthread_mutex_unlock(&lock_connec);
             printf("[!] Connection closed by server\n");
             exit(-1);
         case -1:
             ERROR_HANDLE();
     }
+    printf("\n---------------------\n");
+    printf("* recv buffer: %s", buffer);
+    printf("\n---------------------\n");
 }
 
 void client_send_message(Client *client, MSG_TYPE request)
