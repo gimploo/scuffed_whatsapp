@@ -1,13 +1,13 @@
 #include "common.h"
 
 volatile bool connected = false;
-pthread_mutex_t lock_connec = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t connec_lock = PTHREAD_MUTEX_INITIALIZER;
 
-pthread_mutex_t lock_pause = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond_pause = PTHREAD_COND_INITIALIZER;
-volatile bool pause_other_thread = false;
+pthread_mutex_t pause_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t pause_cond = PTHREAD_COND_INITIALIZER;
+volatile bool pause_thread = false;
 
-Client * client_init(int server_port);
+Client * client_init(short server_port);
 void client_thread_init(Client *client);
 void * client_send(void *pclient);
 void * client_recv(void *client);
@@ -93,17 +93,19 @@ void * client_send(void *pclient)
 
     while (connected)
     {
-        pthread_mutex_lock(&lock_pause);
-        while (pause_other_thread)
+        pthread_mutex_lock(&pause_lock);
+        while (pause_thread)
         {
-            pthread_cond_wait(&cond_pause, &lock_pause);
-            pause_other_thread = false;
+            printf("waiting for signal\n");
+            pthread_cond_wait(&pause_cond, &pause_lock);
         }
+        pthread_mutex_unlock(&pause_lock);
 
         do {
+            if (pause_thread == true) { continue; }
             cstring_input(pre_mssg, sendline);
-        } while (strcmp(sendline, "\n") == 0);
-
+        } while (strcmp(sendline, "\0") == 0);
+        
         if (strcmp(sendline, "exit()") == 0)
         {
             printf("\n[?] Do you want to exit (y or n): ");
@@ -114,19 +116,15 @@ void * client_send(void *pclient)
             }
             else
             {
-                pthread_mutex_lock(&lock_connec);
+                pthread_mutex_lock(&connec_lock);
                 connected = false;
-                pthread_mutex_unlock(&lock_connec);
+                pthread_mutex_unlock(&connec_lock);
                 return NULL;
             }
             CLEAR_STDIN();
         }
-
-        /*if (strcmp(sendline, "\n") == 0)*/
-        /*{*/
-            /*pthread_mutex_unlock(&lock_pause);*/
-            /*continue;*/
-        /*}*/
+        else if (strcmp(sendline , "\0") == 0)
+            continue;
         else if (strcmp(sendline, "cls") == 0)
         {
             system("clear");
@@ -138,13 +136,12 @@ void * client_send(void *pclient)
         }
         else if (strcmp(sendline, "m") == 0)
         {
-            client_send_message(client, CLIENT_SET_PARTNER);
+            client_send_message(client, CLIENT_CHOOSE_PARTNER);
             client_choose_partner(client);
         }
         else 
             client_sendline(client, sendline, MAXLINE);
 
-        pthread_mutex_unlock(&lock_pause);
         // FIXME:
         // hackish way for the proc to slow down and not take 
         // concurrent or accidental inputs
@@ -170,41 +167,34 @@ void * client_recv(void *pclient)
                 print_active_users(recvline);
                 break;
 
-            case CLIENT_SET_PARTNER:
-                client_send_message(client, CLIENT_SET_PARTNER);
+            case CLIENT_CHOOSE_PARTNER:
+                client_send_message(client, CLIENT_CHOOSE_PARTNER);
                 client_choose_partner(client);
                 break;
 
             case ASK:
-                // NOTE:
-                // A solution i found that tried to resolve the confict that
-                // happened btw the other threads cstring func with the one here
-                pthread_mutex_lock(&lock_pause);
-                pause_other_thread = true;
-                pthread_mutex_unlock(&lock_pause);
-               
-                // Error handling user input
+                sleep(1);
                 do {
                     cstring_input("[?] choice (yes or no): ", choice);
-                    for (int i = 0; choice[i]; i++) 
+                    for (int i = 0; choice[i]; i++)
                         choice[i] = tolower(choice[i]);
-                } 
-                while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
-
-                pthread_cond_signal(&cond_pause);
-                client_sendline(client, choice, 5);
+                } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
+                client_sendline(client, choice, 4);
                 break;
 
             case WAIT:
                 printf("[!] Waiting ...\n");
-                pthread_mutex_lock(&lock_pause);
-                pause_other_thread = true;
-                pthread_mutex_unlock(&lock_pause);
+                pthread_mutex_lock(&pause_lock);
+                pause_thread = true;
+                pthread_mutex_unlock(&pause_lock);
                 break;
 
             case CONTINUE:
                 printf("[!] Continue\n");
-                pthread_cond_signal(&cond_pause);
+                pthread_mutex_lock(&pause_lock);
+                pause_thread = false;
+                pthread_cond_signal(&pause_cond);
+                pthread_mutex_unlock(&pause_lock);
                 break;
 
             case CLIENT_UNAVAILABLE:
@@ -226,10 +216,14 @@ void * client_recv(void *pclient)
 }
 
 
-Client * client_init(int server_port)
+Client * client_init(short server_port)
 {
     Client *client = malloc(sizeof(Client));
-    cstring_input("[?] Name: ", client->name);
+
+    do {
+        cstring_input("[?] Name: ", client->name);
+    } while(strcmp(client->name, "\0") == 0);
+
     client->available = true;
     client->next = NULL;
     client->partner = NULL;
@@ -270,19 +264,22 @@ void client_send_info(Client *client)
     // While username is taken
     while (strcmp(recvline, msg_to_cstr(CLIENT_USERNAME_TAKEN)) == 0)
     {
+        printf("[!] That name is taken\n");
         username_is_changed = true;
         do {
-            cstring_input("[!] That name is taken\n[?] New Name: ", new_name);
-        } while (strcmp(new_name, name_taken) == 0);
+            cstring_input("[?] New Name: ", new_name);
+        } while (strcmp(new_name, name_taken) == 0 || strcmp(new_name, "\0") == 0);
 
         client_sendline(client, new_name, MAXWORD);
 
         client_recvline(client, recvline, MAXLINE);
 
         if (strcmp(recvline,msg_to_cstr(CLIENT_USERNAME_TAKEN)) == 0)
+        {
             strcpy(name_taken, new_name);
+        }
     }
-    if (username_is_changed) strcpy(client->name, new_name);
+    if (username_is_changed) { strcpy(client->name, new_name); }
 
 }
 
@@ -317,9 +314,9 @@ void client_recvline(Client *client, char buffer[], int limit)
     switch(recv(client->socket, buffer, limit, 0))
     {
         case 0:
-            pthread_mutex_lock(&lock_connec);
+            pthread_mutex_lock(&connec_lock);
             connected = false;
-            pthread_mutex_unlock(&lock_connec);
+            pthread_mutex_unlock(&connec_lock);
             printf("[!] Connection closed by server\n");
             exit(-1);
         case -1:
