@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <ctype.h>
+#include <assert.h>
 
 #define SERVER_PORT 18000 
 #define MAXMSG 25
@@ -42,8 +43,8 @@
 typedef enum {
     SUCCESS,
     FAILED,
-    WAIT,
-    CONTINUE,
+    PAUSE_THREAD,
+    UNPAUSE_THREAD,
     ASK,
     ACTIVE_USERS,
     CLIENT_UNAVAILABLE,

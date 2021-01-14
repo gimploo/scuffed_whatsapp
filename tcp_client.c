@@ -7,19 +7,16 @@ pthread_mutex_t pause_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t pause_cond = PTHREAD_COND_INITIALIZER;
 volatile bool pause_thread = false;
 
-Client * client_init(short server_port);
-void client_thread_init(Client *client);
-void * client_send(void *pclient);
-void * client_recv(void *client);
-
-void print_active_users(char buffer[]);
-void client_send_info(Client *client);
-
-void client_sendline(Client *client, char buffer[], int limit);
-void client_recvline(Client *client, char buffer[], int limit);
-
-void client_send_message(Client *client, MSG_TYPE request);
-void client_choose_partner(Client *client);
+Client *    client_init(short server_port);
+void        client_thread_init(Client *client);
+void *      client_send(void *pclient);
+void *      client_recv(void *client);
+void        print_active_users(char buffer[]);
+void        client_send_info(Client *client);
+void        client_sendline(Client *client, char buffer[], int limit);
+void        client_recvline(Client *client, char buffer[], int limit);
+void        client_send_message(Client *client, MSG_TYPE request);
+void        client_choose_partner(Client *client);
 
 int main(int argc, char *argv[])
 {
@@ -93,18 +90,24 @@ void * client_send(void *pclient)
 
     while (connected)
     {
+        // NOTE:
+        // Having only mutex locks and no cond variables proved to work 
+        // having a thread sleep before it relocks but this proved to be an ugly
+        // solution meaning the user would need to press enter to switch between
+        // the two threads. 
+       
+        // TODO: Further experimentation with cond variables is required.
+        
         pthread_mutex_lock(&pause_lock);
+        /*
         while (pause_thread)
         {
-            printf("waiting for signal\n");
             pthread_cond_wait(&pause_cond, &pause_lock);
         }
-        pthread_mutex_unlock(&pause_lock);
+        */
 
-        do {
-            if (pause_thread == true) { continue; }
-            cstring_input(pre_mssg, sendline);
-        } while (strcmp(sendline, "\0") == 0);
+        // User input
+        cstring_input(pre_mssg, sendline);
         
         if (strcmp(sendline, "exit()") == 0)
         {
@@ -116,6 +119,7 @@ void * client_send(void *pclient)
             }
             else
             {
+                pthread_mutex_unlock(&pause_lock);
                 pthread_mutex_lock(&connec_lock);
                 connected = false;
                 pthread_mutex_unlock(&connec_lock);
@@ -124,7 +128,9 @@ void * client_send(void *pclient)
             CLEAR_STDIN();
         }
         else if (strcmp(sendline , "\0") == 0)
-            continue;
+        {
+            ;
+        }
         else if (strcmp(sendline, "cls") == 0)
         {
             system("clear");
@@ -141,6 +147,9 @@ void * client_send(void *pclient)
         }
         else 
             client_sendline(client, sendline, MAXLINE);
+
+        pthread_mutex_unlock(&pause_lock);
+        sleep(1);
 
         // FIXME:
         // hackish way for the proc to slow down and not take 
@@ -160,6 +169,8 @@ void * client_recv(void *pclient)
     {
         client_recvline(client, recvline, MAXLINE);
 
+        pthread_mutex_lock(&pause_lock);
+
         switch(cstr_to_msg(recvline))
         {
             case ACTIVE_USERS:
@@ -173,23 +184,26 @@ void * client_recv(void *pclient)
                 break;
 
             case ASK:
-                sleep(1);
+                /*pthread_mutex_lock(&pause_lock);*/
+                /*pause_thread = true;*/
+
                 do {
                     cstring_input("[?] choice (yes or no): ", choice);
                     for (int i = 0; choice[i]; i++)
                         choice[i] = tolower(choice[i]);
-                } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
+               } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
                 client_sendline(client, choice, 4);
+                /*pthread_mutex_unlock(&pause_lock);*/
                 break;
 
-            case WAIT:
+            case PAUSE_THREAD:
                 printf("[!] Waiting ...\n");
                 pthread_mutex_lock(&pause_lock);
                 pause_thread = true;
                 pthread_mutex_unlock(&pause_lock);
                 break;
 
-            case CONTINUE:
+            case UNPAUSE_THREAD:
                 printf("[!] Continue\n");
                 pthread_mutex_lock(&pause_lock);
                 pause_thread = false;
@@ -211,8 +225,14 @@ void * client_recv(void *pclient)
                 break;
         }
 
+        pthread_mutex_unlock(&pause_lock);
+
     }
+
+    pthread_mutex_unlock(&pause_lock);
+
     return NULL;
+
 }
 
 
@@ -303,9 +323,11 @@ void client_sendline(Client *client, char buffer[], int limit)
 {
     if (send(client->socket, buffer, limit, 0) < 0)
         ERROR_HANDLE();
+    /*
     printf("\n---------------------\n");
     printf("* send buffer: %s", buffer);
     printf("\n---------------------\n");
+    */
 }
 
 void client_recvline(Client *client, char buffer[], int limit)
@@ -322,9 +344,11 @@ void client_recvline(Client *client, char buffer[], int limit)
         case -1:
             ERROR_HANDLE();
     }
+    /*
     printf("\n---------------------\n");
     printf("* recv buffer: %s", buffer);
     printf("\n---------------------\n");
+    */
 }
 
 void client_send_message(Client *client, MSG_TYPE request)
