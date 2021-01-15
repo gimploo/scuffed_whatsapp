@@ -107,14 +107,14 @@ void * client_send(void *pclient)
         
 
         // User input
-        if (!pause_thread)
-        {
+        /*if (!pause_thread)*/
+        /*{*/
             cstring_input(pre_mssg, sendline);
-        }
-        else 
-        {
-            continue;
-        }
+        /*}*/
+        /*else */
+        /*{*/
+            /*continue;*/
+        /*}*/
         
         if (strcmp(sendline, "exit()") == 0)
         {
@@ -146,6 +146,7 @@ void * client_send(void *pclient)
         else if (strcmp(sendline, "cls") == 0)
         {
             system("clear");
+            continue;
         }
         //TESTING
         else if (strcmp(sendline , "a") == 0)
@@ -193,17 +194,12 @@ void * client_recv(void *pclient)
                 break;
 
             case ASK:
-                pthread_mutex_lock(&pause_lock);
-                pause_thread = true;
-                pthread_mutex_unlock(&pause_lock);
-
                 do {
                     cstring_input("[?] choice (yes or no): ", choice);
                     for (int i = 0; choice[i]; i++)
                         choice[i] = tolower(choice[i]);
                } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
                 client_sendline(client, choice, 4);
-
                 break;
 
             case PAUSE_THREAD:

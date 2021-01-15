@@ -34,6 +34,7 @@ void *      client_pair_chat_handler(void *pclient_pair);
 Client *    client_create_node(int socket, char *addr);
 void        client_to_client_connection(Client *);
 void        client_get_info(Client *);
+int client_pair_chat_thread_init(Client_Pair client_pair_info);
     
 // miscellaneous
 void        print_active_users(List *list);
@@ -402,22 +403,40 @@ void client_to_client_connection(Client *client)
 
    Client_Pair client_pair_info = {
        .client1 = client, 
-       .client2 = other_client, 
+       .client2 = client->partner, 
        .active = true, 
        .lock = PTHREAD_RWLOCK_INITIALIZER
    };
 
-   pthread_t tid1;
-   pthread_create(&tid1, NULL, client_pair_chat_handler, &client_pair_info);
-   pthread_join(tid1, NULL);
+  client_pair_chat_thread_init(client_pair_info);
 
+}
+
+int client_pair_chat_thread_init(Client_Pair client_pair_info)
+{
+   pthread_t tid1;
+   if (pthread_create(&tid1, NULL, client_pair_chat_handler, &client_pair_info) != 0)
+   {
+       fprintf(stderr, "client_pair_chat_thread_init: unable to create thread\n");
+       return errno;
+   }
+   if (pthread_join(tid1, NULL) != 0)
+   {
+       fprintf(stderr, "client_pair_chat_thread_init: unable to create thread\n");
+       return errno;
+   }
+   return 0;
 }
 
 void *client_pair_chat_handler(void *pclient_pair)
 {
     char recvline[MAXLINE+1];
     char sendline[MAXSND+1];
+    char mssg[MAXLINE+1];
+
     Client_Pair *clients = (Client_Pair *)pclient_pair;
+    snprintf(mssg, MAXLINE, "%s left\n", clients->client1->name);
+
     while (clients->active)
     {
         switch(recv(clients->client1->socket, recvline, MAXLINE, 0 ))
@@ -428,6 +447,8 @@ void *client_pair_chat_handler(void *pclient_pair)
                 pthread_rwlock_wrlock(&clients->lock);
                 clients->active = false;
                 pthread_rwlock_unlock(&clients->lock);
+
+                server_sendline(clients->client2, mssg, MAXLINE);
                 return NULL;
         }
         snprintf(sendline, MAXSND, "%s: %s", clients->client1->name, recvline);
