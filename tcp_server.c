@@ -360,7 +360,7 @@ void client_to_client_connection(Client *client)
 
        // other client
        server_sendline(other_client, sendline, MAXLINE);
-       /*server_send_message(other_client, PAUSE_THREAD);*/
+       server_send_message(other_client, PAUSE_THREAD);
        server_send_message(other_client, ASK);
        server_recvline(other_client, recvline, 5);
 
@@ -372,14 +372,14 @@ void client_to_client_connection(Client *client)
            other_client->partner = client;
            pthread_rwlock_unlock(&list.lock);
            server_send_message(other_client, CLIENT_CHOOSE_PARTNER);
-           /*server_send_message(other_client, UNPAUSE_THREAD);*/
+           server_send_message(other_client, UNPAUSE_THREAD);
            // TODO: what if the otherclient choose someone else
            // this doesnt stop the first client from having a chat thread
        }
        else 
        {
            snprintf(sendline, MAXLINE, "%s declined", other_client->name);
-           /*server_send_message(other_client, UNPAUSE_THREAD);*/
+           server_send_message(other_client, UNPAUSE_THREAD);
            server_sendline(client, sendline, MAXLINE);
            return ;
        }
@@ -388,7 +388,7 @@ void client_to_client_connection(Client *client)
    {
        snprintf(sendline, MAXLINE, "(%s is talking... )", other_client->name);
        server_sendline(client, sendline, MAXLINE);
-       /*server_send_message(other_client, UNPAUSE_THREAD);*/
+       server_send_message(other_client, UNPAUSE_THREAD);
        snprintf(sendline, MAXLINE, "(%s is talking... )", client->name);
        server_sendline(other_client, sendline, MAXLINE);
    }

@@ -99,27 +99,39 @@ void * client_send(void *pclient)
         // TODO: Further experimentation with cond variables is required.
         
         pthread_mutex_lock(&pause_lock);
-        /*
         while (pause_thread)
         {
             pthread_cond_wait(&pause_cond, &pause_lock);
         }
-        */
+        pthread_mutex_unlock(&pause_lock);
+        
 
         // User input
-        cstring_input(pre_mssg, sendline);
+        if (!pause_thread)
+        {
+            cstring_input(pre_mssg, sendline);
+        }
+        else 
+        {
+            continue;
+        }
         
         if (strcmp(sendline, "exit()") == 0)
         {
             printf("\n[?] Do you want to exit (y or n): ");
             if ((chr = getchar()) == 'n')
             {
-                cstring_input(NULL, sendline);
-                continue;
+                if (!pause_thread)
+                {
+                    cstring_input(NULL, sendline);
+                }
+                else 
+                {
+                    continue;
+                }
             }
             else
             {
-                pthread_mutex_unlock(&pause_lock);
                 pthread_mutex_lock(&connec_lock);
                 connected = false;
                 pthread_mutex_unlock(&connec_lock);
@@ -129,7 +141,7 @@ void * client_send(void *pclient)
         }
         else if (strcmp(sendline , "\0") == 0)
         {
-            ;
+            continue;
         }
         else if (strcmp(sendline, "cls") == 0)
         {
@@ -148,13 +160,12 @@ void * client_send(void *pclient)
         else 
             client_sendline(client, sendline, MAXLINE);
 
-        pthread_mutex_unlock(&pause_lock);
-        sleep(1);
+        /*sleep(1);*/
 
         // FIXME:
         // hackish way for the proc to slow down and not take 
         // concurrent or accidental inputs
-        /*CLEAR_STDIN();*/
+        CLEAR_STDIN();
     }
     return NULL;
 }
@@ -169,8 +180,6 @@ void * client_recv(void *pclient)
     {
         client_recvline(client, recvline, MAXLINE);
 
-        pthread_mutex_lock(&pause_lock);
-
         switch(cstr_to_msg(recvline))
         {
             case ACTIVE_USERS:
@@ -184,8 +193,9 @@ void * client_recv(void *pclient)
                 break;
 
             case ASK:
-                /*pthread_mutex_lock(&pause_lock);*/
-                /*pause_thread = true;*/
+                pthread_mutex_lock(&pause_lock);
+                pause_thread = true;
+                pthread_mutex_unlock(&pause_lock);
 
                 do {
                     cstring_input("[?] choice (yes or no): ", choice);
@@ -193,7 +203,7 @@ void * client_recv(void *pclient)
                         choice[i] = tolower(choice[i]);
                } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
                 client_sendline(client, choice, 4);
-                /*pthread_mutex_unlock(&pause_lock);*/
+
                 break;
 
             case PAUSE_THREAD:
@@ -224,13 +234,7 @@ void * client_recv(void *pclient)
                 printf("\n%s\n", recvline);
                 break;
         }
-
-        pthread_mutex_unlock(&pause_lock);
-
     }
-
-    pthread_mutex_unlock(&pause_lock);
-
     return NULL;
 
 }
