@@ -90,13 +90,6 @@ void * client_send(void *pclient)
 
     while (connected)
     {
-        // NOTE:
-        // Having only mutex locks and no cond variables proved to work 
-        // having a thread sleep before it relocks but this proved to be an ugly
-        // solution meaning the user would need to press enter to switch between
-        // the two threads. 
-       
-        // TODO: Further experimentation with cond variables is required.
         
         pthread_mutex_lock(&pause_lock);
         while (pause_thread)
@@ -105,16 +98,7 @@ void * client_send(void *pclient)
         }
         pthread_mutex_unlock(&pause_lock);
         
-
-        // User input
-        /*if (!pause_thread)*/
-        /*{*/
-            cstring_input(pre_mssg, sendline);
-        /*}*/
-        /*else */
-        /*{*/
-            /*continue;*/
-        /*}*/
+        cstring_input(pre_mssg, sendline);
         
         if (strcmp(sendline, "exit()") == 0)
         {
@@ -161,12 +145,10 @@ void * client_send(void *pclient)
         else 
             client_sendline(client, sendline, MAXLINE);
 
-        /*sleep(1);*/
-
         // FIXME:
         // hackish way for the proc to slow down and not take 
         // concurrent or accidental inputs
-        CLEAR_STDIN();
+        /*CLEAR_STDIN();*/
     }
     return NULL;
 }
@@ -199,18 +181,22 @@ void * client_recv(void *pclient)
                     for (int i = 0; choice[i]; i++)
                         choice[i] = tolower(choice[i]);
                } while (strcmp(choice, "yes") != 0 && strcmp(choice, "no") != 0);
+
                 client_sendline(client, choice, 4);
                 break;
 
             case PAUSE_THREAD:
                 printf("[!] Waiting ...\n");
+                printf("Lock enabled\n");
                 pthread_mutex_lock(&pause_lock);
                 pause_thread = true;
                 pthread_mutex_unlock(&pause_lock);
+                printf("Lock disabled\n");
+                sleep(1);
                 break;
 
             case UNPAUSE_THREAD:
-                printf("[!] Continue\n");
+                printf("[!] Continue ...\n");
                 pthread_mutex_lock(&pause_lock);
                 pause_thread = false;
                 pthread_cond_signal(&pause_cond);
@@ -234,7 +220,6 @@ void * client_recv(void *pclient)
     return NULL;
 
 }
-
 
 Client * client_init(short server_port)
 {
@@ -323,8 +308,8 @@ void client_sendline(Client *client, char buffer[], int limit)
 {
     if (send(client->socket, buffer, limit, 0) < 0)
         ERROR_HANDLE();
+
     /*
-    printf("\n---------------------\n");
     printf("* send buffer: %s", buffer);
     printf("\n---------------------\n");
     */

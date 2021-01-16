@@ -19,8 +19,8 @@ pthread_t thread_pool[SERVER_BACKLOG];
 
 // Server 
 int         server_init(short port, int backlog);
-int         server_sendline(Client *, char buffer[], size_t limit);
-int         server_recvline(Client *, char buffer[], size_t limit);
+int         server_sendline(Client *, char buffer[], int limit);
+int         server_recvline(Client *, char buffer[], int limit);
 Client *    accept_connection(int server_socket);
 void        server_remove_client(Client *);
 void        server_add_client(Client *);
@@ -34,7 +34,7 @@ void *      client_pair_chat_handler(void *pclient_pair);
 Client *    client_create_node(int socket, char *addr);
 void        client_to_client_connection(Client *);
 void        client_get_info(Client *);
-int client_pair_chat_thread_init(Client_Pair client_pair_info);
+int         client_pair_chat_thread_handler(Client_Pair client_pair_info);
     
 // miscellaneous
 void        print_active_users(List *list);
@@ -264,7 +264,7 @@ void * server_recv(void *pclient)
     return NULL;
 }
 
-int server_sendline(Client *client, char buffer[], size_t limit)
+int server_sendline(Client *client, char buffer[], int limit)
 {
     if (buffer[0] == '\0')
     {
@@ -277,14 +277,14 @@ int server_sendline(Client *client, char buffer[], size_t limit)
         return -1;
     }
     
-    printf("\n---------------------\n");
-    printf("* send buffer: %s", buffer);
-    printf("\n---------------------\n");
+    /*printf("\n---------------------\n");*/
+    /*printf("* send buffer: %s", buffer);*/
+    /*printf("\n---------------------\n");*/
     
     return 0;
 }
 
-int server_recvline(Client *client, char buffer[], size_t limit)
+int server_recvline(Client *client, char buffer[], int limit)
 {
     int n;
     memset(buffer, 0, limit);
@@ -301,16 +301,18 @@ int server_recvline(Client *client, char buffer[], size_t limit)
         return -2;
     }
     
-    printf("\n---------------------\n");
-    printf("* recv buffer: %s", buffer);
-    printf("\n---------------------\n");
+    /*printf("\n---------------------\n");*/
+    /*printf("* recv buffer: %s", buffer);*/
+    /*printf("\n---------------------\n");*/
     
     return 0;
 }
 
 void server_send_message(Client *client, MSG_TYPE request)
 {
-    server_sendline(client, msg_to_cstr(request), MAXMSG);
+    char *str_msg = msg_to_cstr(request);
+    server_sendline(client, str_msg, MAXMSG);
+    printf("[LOG] %s requested: %s\n", client->name, str_msg);
 }
 
 Client * client_get_by_name_from_list(char *name)
@@ -338,68 +340,88 @@ void client_to_client_connection(Client *client)
    server_recvline(client, recvline, MAXWORD);
    Client *other_client = client_get_by_name_from_list(recvline);
 
-   // Checking if the client choose is legit
-   if (other_client == NULL)
+   pthread_rwlock_wrlock(&list.lock);
    {
-       fprintf(stderr, 
-               "client_to_client_connection: client choose invalid client\n");
-       server_send_message(client, CLIENT_NOT_FOUND);
-       return ;
-   } 
-   else if (client == other_client)
-   {
-       fprintf(stderr, 
-               "client_to_client_connection: client choose him/her self\n");
-       server_send_message(client, DUMB_ASS);
-       return ;
-   }
-
-   // Checking whether the other client wanted to talk with you
-   if (other_client->partner != client)
-   {
-       snprintf(sendline, MAXLINE, "%s wants to talk to you",client->name);
-
-       // other client
-       server_sendline(other_client, sendline, MAXLINE);
-       server_send_message(other_client, PAUSE_THREAD);
-       server_send_message(other_client, ASK);
-       server_recvline(other_client, recvline, 5);
-
-
-       if (strcmp(recvline, "yes") == 0)
+       // Checking if the client choose is legit
+       if (other_client == NULL)
        {
-           pthread_rwlock_wrlock(&list.lock);
-           client->partner = other_client;
-           other_client->partner = client;
+           fprintf(stderr, 
+                   "client_to_client_connection: client choose invalid client\n");
+           server_send_message(client, CLIENT_NOT_FOUND);
            pthread_rwlock_unlock(&list.lock);
-           server_send_message(other_client, CLIENT_CHOOSE_PARTNER);
-           server_send_message(other_client, UNPAUSE_THREAD);
-           // TODO: what if the otherclient choose someone else
-           // this doesnt stop the first client from having a chat thread
-       }
-       else 
-       {
-           snprintf(sendline, MAXLINE, "%s declined", other_client->name);
-           server_send_message(other_client, UNPAUSE_THREAD);
-           server_sendline(client, sendline, MAXLINE);
            return ;
+       } 
+       else if (client == other_client)
+       {
+           fprintf(stderr, 
+                   "client_to_client_connection: client choose him/her self\n");
+           server_send_message(client, DUMB_ASS);
+           pthread_rwlock_unlock(&list.lock);
+           return ;
+       } 
+
+       // Checking whether the other client wanted to talk with you
+       if (other_client->partner != client)
+       {
+           snprintf(sendline, MAXLINE, "%s wants to talk to you",client->name);
+
+           // other client
+           server_sendline(other_client, sendline, MAXLINE);
+           server_send_message(other_client, PAUSE_THREAD);
+           server_send_message(other_client, ASK);
+           server_recvline(other_client, recvline, 5);
+
+           if (strcmp(recvline, "yes") == 0)
+           {
+               /*pthread_rwlock_wrlock(&list.lock);*/
+                   client->partner = other_client;
+                   other_client->partner = client;
+               /*pthread_rwlock_unlock(&list.lock);*/
+
+               server_send_message(other_client, CLIENT_CHOOSE_PARTNER);
+               server_send_message(other_client, UNPAUSE_THREAD);
+
+               /*pthread_rwlock_wrlock(&list.lock);*/
+                   if (other_client->available == false && 
+                           other_client->partner != client)
+                   {
+                       client->partner = NULL;
+                       snprintf(sendline, MAXLINE, 
+                               " %s choose someone else", other_client->name);
+                       server_sendline(client, sendline, MAXLINE);
+                   }
+               /*pthread_rwlock_unlock(&list.lock);*/
+
+               // TODO: what if the otherclient choose someone else
+               // this doesnt stop the first client from having a chat thread
+           }
+           else 
+           {
+               snprintf(sendline, MAXLINE, "%s declined", other_client->name);
+               server_send_message(other_client, UNPAUSE_THREAD);
+               server_sendline(client, sendline, MAXLINE);
+
+               pthread_rwlock_unlock(&list.lock);
+               return ;
+           }
        }
+       else if (other_client->partner == client)
+       {
+           snprintf(sendline, MAXLINE, "(%s is talking... )", other_client->name);
+           server_sendline(client, sendline, MAXLINE);
+           server_send_message(other_client, UNPAUSE_THREAD);
+           snprintf(sendline, MAXLINE, "(%s is talking... )", client->name);
+           server_sendline(other_client, sendline, MAXLINE);
+       }
+
    }
-   else if (other_client->partner == client)
-   {
-       snprintf(sendline, MAXLINE, "(%s is talking... )", other_client->name);
-       server_sendline(client, sendline, MAXLINE);
-       server_send_message(other_client, UNPAUSE_THREAD);
-       snprintf(sendline, MAXLINE, "(%s is talking... )", client->name);
-       server_sendline(other_client, sendline, MAXLINE);
-   }
+
+   client->available = false;
+   pthread_rwlock_unlock(&list.lock);
 
    //TODO: have the thread creation happen after two clients decides to talk.
    printf("%s initiated chat mode\n", client->name);
 
-   pthread_rwlock_wrlock(&list.lock);
-   client->available = false;
-   pthread_rwlock_unlock(&list.lock);
 
    Client_Pair client_pair_info = {
        .client1 = client, 
@@ -408,11 +430,11 @@ void client_to_client_connection(Client *client)
        .lock = PTHREAD_RWLOCK_INITIALIZER
    };
 
-  client_pair_chat_thread_init(client_pair_info);
+  client_pair_chat_thread_handler(client_pair_info);
 
 }
 
-int client_pair_chat_thread_init(Client_Pair client_pair_info)
+int client_pair_chat_thread_handler(Client_Pair client_pair_info)
 {
    pthread_t tid1;
    if (pthread_create(&tid1, NULL, client_pair_chat_handler, &client_pair_info) != 0)
