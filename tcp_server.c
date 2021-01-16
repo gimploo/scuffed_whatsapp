@@ -21,48 +21,48 @@ pthread_t thread_pool[SERVER_BACKLOG];
 int         server_init(short port, int backlog);
 int         server_sendline(Client *, char buffer[], int limit);
 int         server_recvline(Client *, char buffer[], int limit);
-Client *    accept_connection(int server_socket);
+Client *    server_accept_connection(int server_socket);
 void        server_remove_client(Client *);
 void        server_add_client(Client *);
 void        server_send_message(Client *, MSG_TYPE request);
-
-// Thread specific functions
 void *      server_recv(void *client);
-void *      client_pair_chat_handler(void *pclient_pair);
 
 // Client
 Client *    client_create_node(int socket, char *addr);
-void        client_to_client_connection(Client *);
 void        client_get_info(Client *);
-int         client_pair_chat_thread_handler(Client_Pair client_pair_info);
+Client *    client_get_by_name_from_list(char *name);
+Client *    client_set_partner(Client *client);
+
+int         client_partner_chat_init(Client *client);
+int         client_partner_thread_handler(Client *client);
+void *      client_partner_chat_handler(void *pclient_pair);
     
 // miscellaneous
 void        print_active_users(List *list);
 void        send_active_users(Client *);
 int         does_user_exist(char *name);
-Client *    client_get_by_name_from_list(char *name);
 
 int main(void)
 {
+    printf("\n[LOG] Listening @ %d ...\n", SERVER_PORT);
+
     // Initializing server
     int server_socket = server_init(SERVER_PORT, SERVER_BACKLOG);
 
     /*for (int i = 0;i < 2; i++)*/
     for(;;)
     {
-        printf("\n[*] Listening @ %d ...\n", SERVER_PORT);
-
         // prints all acitve users in a menu
         print_active_users(&list);
 
         // Accepts incomming connection
-        Client *client = accept_connection(server_socket);
+        Client *client = server_accept_connection(server_socket);
 
         // Creates a server recv thread connection
         pthread_t thread1;
         if (pthread_create(&thread1, NULL, server_recv, client) != 0)
         {
-            fprintf(stderr, "pthread_create: failed to create thread\n");
+            fprintf(stderr, "[ERR] pthread_create: failed to create thread\n");
         }
 
     }
@@ -117,6 +117,7 @@ Client * client_create_node(int socket, char addr[])
     client->partner = NULL;
     client->next = NULL;
     client->available = true;
+    client->chat_active = false;
 
     strcpy(client->straddr , addr);
     memset(client->name, 0, MAXWORD);
@@ -131,7 +132,7 @@ Client * client_create_node(int socket, char addr[])
 }
 
 
-Client * accept_connection(int server_socket)
+Client * server_accept_connection(int server_socket)
 {
     int client_socket;
     struct sockaddr_in addr;
@@ -144,8 +145,7 @@ Client * accept_connection(int server_socket)
 
     inet_ntop(AF_INET, &addr, client_address, MAXLINE);
 
-    printf("[*] Client @ %s connecting ... \n", client_address);
-    perror("[!] STATUS ");
+    printf("[LOG] Client @ %s connecting ... \n", client_address);
 
     return client_create_node(client_socket, client_address);
 }
@@ -240,6 +240,7 @@ void * server_recv(void *pclient)
         MSG_TYPE request = cstr_to_msg(recvline);
 
         // Handles the request accordingly
+        printf("[LOG] Client (%s) messaged server: %s\n", client->name, recvline);
         switch (request) 
         {
             case ACTIVE_USERS:
@@ -254,10 +255,14 @@ void * server_recv(void *pclient)
                 server_send_message(client, CLIENT_REGISTERED);
                 break;
              case CLIENT_CHOOSE_PARTNER:
-                client_to_client_connection(client);
+                server_send_message(client, CLIENT_CHOOSE_PARTNER);
+                client_set_partner(client);
+                break;
+             case CLIENT_WANTS_TO_CHAT:
+                client_partner_chat_init(client);
                 break;
              default:
-                fprintf(stderr, "server_request: %s\n", recvline);
+                fprintf(stderr, "[ERR] server_request: %s\n", recvline);
                 break;
         }
     }
@@ -268,12 +273,12 @@ int server_sendline(Client *client, char buffer[], int limit)
 {
     if (buffer[0] == '\0')
     {
-        fprintf(stderr, "[!] server_sendline: buffer empty\n") ;
+        fprintf(stderr, "[ERR] server_sendline: buffer empty\n") ;
         
     }
     if (send(client->socket, buffer, limit, 0) < 0)
     {
-        fprintf(stderr, "server_sendline: error while sending\n");
+        fprintf(stderr, "[ERR] server_sendline: error while sending\n");
         return -1;
     }
     
@@ -312,7 +317,7 @@ void server_send_message(Client *client, MSG_TYPE request)
 {
     char *str_msg = msg_to_cstr(request);
     server_sendline(client, str_msg, MAXMSG);
-    printf("[LOG] %s requested: %s\n", client->name, str_msg);
+    printf("[LOG] server messaged %s : %s\n", client->name[0] == 0 ? "UNKOWN":client->name, str_msg);
 }
 
 Client * client_get_by_name_from_list(char *name)
@@ -332,151 +337,109 @@ Client * client_get_by_name_from_list(char *name)
     return NULL;
 }
 
-void client_to_client_connection(Client *client)
+Client * client_set_partner(Client *client)
 {
-   char recvline[MAXWORD+1];
-   char sendline[MAXLINE+1];
+    char recvline[MAXLINE+1];
 
-   server_recvline(client, recvline, MAXWORD);
-   Client *other_client = client_get_by_name_from_list(recvline);
+    server_recvline(client, recvline, MAXWORD);
+    Client *other_client = client_get_by_name_from_list(recvline);
+    if (other_client == NULL)
+    {
+       fprintf(stderr, "[ERR] client_set_partner: client choose invalid client\n");
+       server_send_message(client, CLIENT_NOT_FOUND);
+       return NULL;
+    } 
+    else if (client == other_client)
+    {
+       fprintf(stderr, "[ERR] client_set_partner: client choose him/her self\n");
+       server_send_message(client, CLIENT_SAME_USER);
+       return NULL;
+    } 
 
-   pthread_rwlock_wrlock(&list.lock);
-   {
-       // Checking if the client choose is legit
-       if (other_client == NULL)
-       {
-           fprintf(stderr, 
-                   "client_to_client_connection: client choose invalid client\n");
-           server_send_message(client, CLIENT_NOT_FOUND);
-           pthread_rwlock_unlock(&list.lock);
-           return ;
-       } 
-       else if (client == other_client)
-       {
-           fprintf(stderr, 
-                   "client_to_client_connection: client choose him/her self\n");
-           server_send_message(client, DUMB_ASS);
-           pthread_rwlock_unlock(&list.lock);
-           return ;
-       } 
+    pthread_rwlock_wrlock(&list.lock);
+    client->partner = other_client;
+    pthread_rwlock_unlock(&list.lock);
 
-       // Checking whether the other client wanted to talk with you
-       if (other_client->partner != client)
-       {
-           snprintf(sendline, MAXLINE, "%s wants to talk to you",client->name);
-
-           // other client
-           server_sendline(other_client, sendline, MAXLINE);
-           server_send_message(other_client, PAUSE_THREAD);
-           server_send_message(other_client, ASK);
-           server_recvline(other_client, recvline, 5);
-
-           if (strcmp(recvline, "yes") == 0)
-           {
-               /*pthread_rwlock_wrlock(&list.lock);*/
-                   client->partner = other_client;
-                   other_client->partner = client;
-               /*pthread_rwlock_unlock(&list.lock);*/
-
-               server_send_message(other_client, CLIENT_CHOOSE_PARTNER);
-               server_send_message(other_client, UNPAUSE_THREAD);
-
-               /*pthread_rwlock_wrlock(&list.lock);*/
-                   if (other_client->available == false && 
-                           other_client->partner != client)
-                   {
-                       client->partner = NULL;
-                       snprintf(sendline, MAXLINE, 
-                               " %s choose someone else", other_client->name);
-                       server_sendline(client, sendline, MAXLINE);
-                   }
-               /*pthread_rwlock_unlock(&list.lock);*/
-
-               // TODO: what if the otherclient choose someone else
-               // this doesnt stop the first client from having a chat thread
-           }
-           else 
-           {
-               snprintf(sendline, MAXLINE, "%s declined", other_client->name);
-               server_send_message(other_client, UNPAUSE_THREAD);
-               server_sendline(client, sendline, MAXLINE);
-
-               pthread_rwlock_unlock(&list.lock);
-               return ;
-           }
-       }
-       else if (other_client->partner == client)
-       {
-           snprintf(sendline, MAXLINE, "(%s is talking... )", other_client->name);
-           server_sendline(client, sendline, MAXLINE);
-           server_send_message(other_client, UNPAUSE_THREAD);
-           snprintf(sendline, MAXLINE, "(%s is talking... )", client->name);
-           server_sendline(other_client, sendline, MAXLINE);
-       }
-
-   }
-
-   client->available = false;
-   pthread_rwlock_unlock(&list.lock);
-
-   //TODO: have the thread creation happen after two clients decides to talk.
-   printf("%s initiated chat mode\n", client->name);
-
-
-   Client_Pair client_pair_info = {
-       .client1 = client, 
-       .client2 = client->partner, 
-       .active = true, 
-       .lock = PTHREAD_RWLOCK_INITIALIZER
-   };
-
-  client_pair_chat_thread_handler(client_pair_info);
-
+    return 0;
 }
 
-int client_pair_chat_thread_handler(Client_Pair client_pair_info)
+int client_partner_chat_init(Client *client)
+{
+
+    if (client->partner == NULL)
+    {
+        fprintf(stderr, "[ERR] client_partner_chat_init: partner is null\n");
+        return -1;
+    }
+    Client *other_client = client->partner;
+
+    pthread_rwlock_wrlock(&list.lock);
+        if (other_client->partner == client)
+        {
+           server_send_message(client, CLIENT_WANTS_TO_CHAT);
+           server_send_message(other_client, CLIENT_WANTS_TO_CHAT);
+           client->available = other_client->available = false;
+        }
+        else 
+            return -3;
+    pthread_rwlock_unlock(&list.lock);
+
+    if (client_partner_thread_handler(client) != 0 || client_partner_thread_handler(client->partner) != 0)
+    {
+        return -4;
+    }
+
+
+    return 0;
+}
+
+int client_partner_thread_handler(Client *client)
 {
    pthread_t tid1;
-   if (pthread_create(&tid1, NULL, client_pair_chat_handler, &client_pair_info) != 0)
+   if (pthread_create(&tid1, NULL, client_partner_chat_handler, client) != 0)
    {
-       fprintf(stderr, "client_pair_chat_thread_init: unable to create thread\n");
+       fprintf(stderr, "[ERR] client_partner_chat_thread_handler: unable to create thread\n");
        return errno;
    }
    if (pthread_join(tid1, NULL) != 0)
    {
-       fprintf(stderr, "client_pair_chat_thread_init: unable to create thread\n");
+       fprintf(stderr, "[ERR] client_partner_chat_thread_handler: unable to join thread\n");
        return errno;
    }
+
    return 0;
 }
 
-void *client_pair_chat_handler(void *pclient_pair)
+void *client_partner_chat_handler(void *pclient)
 {
     char recvline[MAXLINE+1];
     char sendline[MAXSND+1];
     char mssg[MAXLINE+1];
 
-    Client_Pair *clients = (Client_Pair *)pclient_pair;
-    snprintf(mssg, MAXLINE, "%s left\n", clients->client1->name);
+    Client *client = (Client *)pclient;
+    snprintf(mssg, MAXLINE, "%s left\n", client->name);
 
-    while (clients->active)
+    while (client->chat_active)
     {
-        switch(recv(clients->client1->socket, recvline, MAXLINE, 0 ))
+        switch(recv(client->socket, recvline, MAXLINE, 0 ))
         {
             case -1:
                 continue;
             case 0:
-                pthread_rwlock_wrlock(&clients->lock);
-                clients->active = false;
-                pthread_rwlock_unlock(&clients->lock);
+                pthread_rwlock_wrlock(&client->lock);
+                    client->chat_active = false;
+                pthread_rwlock_unlock(&client->lock);
 
-                server_sendline(clients->client2, mssg, MAXLINE);
+                server_sendline(client->partner, mssg, MAXLINE);
                 return NULL;
         }
-        snprintf(sendline, MAXSND, "%s: %s", clients->client1->name, recvline);
-        if (send(clients->client2->socket, sendline, MAXLINE, 0) < 0)
+        snprintf(sendline, MAXSND, "%s: %s", client->name, recvline);
+        if (send(client->partner->socket, sendline, MAXLINE, 0) < 0)
         {
-            fprintf(stderr, "client2 send error\n");
+            pthread_rwlock_wrlock(&list.lock);
+                client->partner->available = true;
+            pthread_rwlock_unlock(&list.lock);
+            fprintf(stderr, "[ERR] client2 send error\n");
             break;
         }
             
@@ -494,7 +457,7 @@ void server_add_client(Client *client)
 
 void server_remove_client(Client *client)
 {
-    printf("[!] Client (%s) disconnected\n", client->name);
+    fprintf(stderr, "[LOG] Client (%s) disconnected\n", client->name);
     close(client->socket);
 
     pthread_rwlock_wrlock(&list.lock);
@@ -508,13 +471,13 @@ void server_remove_client(Client *client)
     switch (ll_deletion(&list.head, client))
     {
         case 0:
-            fprintf(stderr, "[!] ll_deletion: element deleted\n");
+            fprintf(stderr, "[LOG] ll_deletion: element deleted\n");
             break;
         case 1:
-            fprintf(stderr, "[!] ll_deletion: list empty\n");
+            fprintf(stderr, "[LOG] ll_deletion: list empty\n");
             break;
         case 2:
-            fprintf(stderr, "[!] ll_deletion: element not found\n");
+            fprintf(stderr, "[LOG] ll_deletion: element not found\n");
             break;
     }
     pthread_rwlock_unlock(&list.lock);

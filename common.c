@@ -17,12 +17,14 @@ char * msg_to_cstr(MSG_TYPE msg)
         case UNPAUSE_THREAD:        return "UNPAUSE_THREAD";
         case ASK:                   return "ASK";
         case ACTIVE_USERS:          return "ACTIVE_USERS";
-        case DUMB_ASS:              return "DUMB_ASS";
+        case CLIENT_SAME_USER:      return "CLIENT_SAME_USER";
         case CLIENT_UNAVAILABLE:    return "CLIENT_UNAVAILABLE";
         case CLIENT_NOT_FOUND:      return "CLIENT_NOT_FOUND";
         case CLIENT_CHOOSE_PARTNER: return "CLIENT_CHOOSE_PARTNER";
         case CLIENT_USERNAME_TAKEN: return "USERNAME_TAKEN";
         case CLIENT_REGISTERED:     return "CLIENT_REGISTERED";
+        case CLIENT_CHAT_INITITATED:return "CLIENT_CHAT_INITITATED";
+        case CLIENT_WANTS_TO_CHAT:  return "CLIENT_WANTS_TO_CHAT";
         default:                    return "INVALID_MESSAGE";
     }
 }
@@ -41,12 +43,16 @@ MSG_TYPE cstr_to_msg(char *cstring)
         return ASK;
     else if (strcmp(cstring, "CLIENT_CHOOSE_PARTNER") == 0)
         return CLIENT_CHOOSE_PARTNER;
-    else if (strcmp(cstring, "DUMB_ASS") == 0)
-        return DUMB_ASS;
+    else if (strcmp(cstring, "CLIENT_WANTS_TO_CHAT") == 0)
+        return CLIENT_WANTS_TO_CHAT;
+    else if (strcmp(cstring, "CLIENT_SAME_USER") == 0)
+        return CLIENT_SAME_USER;
     else if (strcmp(cstring, "ACTIVE_USERS") == 0)
         return ACTIVE_USERS;
     else if (strcmp(cstring, "CLIENT_REGISTERED") == 0)
         return CLIENT_REGISTERED;
+    else if(strcmp(cstring, "CLIENT_CHAT_INITITATED") == 0) 
+        return CLIENT_CHAT_INITITATED;
     else if (strcmp(cstring, "USERNAME_TAKEN") == 0)
         return CLIENT_USERNAME_TAKEN;
     else if (strcmp(cstring,  "CLIENT_NOT_FOUND") == 0)

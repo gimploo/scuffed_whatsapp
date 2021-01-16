@@ -53,16 +53,25 @@ typedef enum {
     CLIENT_USERNAME_TAKEN,
     CLIENT_REGISTERED,
     INVALID,
-    DUMB_ASS
+    CLIENT_SAME_USER,
+    CLIENT_WANTS_TO_CHAT,
+    CLIENT_CHAT_INITITATED
 } MSG_TYPE;
 
 typedef struct client {
+
+    // info
     char name[MAXWORD+1];
     int socket;
     char straddr[IPV4_STRLEN+1];
     bool available;
 
+    // chat 
     struct client *partner;
+    volatile bool chat_active;
+    pthread_rwlock_t lock;
+
+    // list
     struct client *next;
 
 } Client;

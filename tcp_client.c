@@ -96,9 +96,9 @@ void * client_send(void *pclient)
         {
             pthread_cond_wait(&pause_cond, &pause_lock);
         }
-        pthread_mutex_unlock(&pause_lock);
         
         cstring_input(pre_mssg, sendline);
+        pthread_mutex_unlock(&pause_lock);
         
         if (strcmp(sendline, "exit()") == 0)
         {
@@ -139,8 +139,11 @@ void * client_send(void *pclient)
         }
         else if (strcmp(sendline, "m") == 0)
         {
+            client_send_message(client, CLIENT_WANTS_TO_CHAT);
+        }
+        else if (strcmp(sendline, "c") == 0)
+        {
             client_send_message(client, CLIENT_CHOOSE_PARTNER);
-            client_choose_partner(client);
         }
         else 
             client_sendline(client, sendline, MAXLINE);
@@ -171,8 +174,21 @@ void * client_recv(void *pclient)
                 break;
 
             case CLIENT_CHOOSE_PARTNER:
-                client_send_message(client, CLIENT_CHOOSE_PARTNER);
-                client_choose_partner(client);
+                /*
+                printf("[!] Waiting ...\n");
+                printf("Lock enabled\n");
+                pthread_mutex_lock(&pause_lock);
+                pause_thread = true;
+                pthread_mutex_unlock(&pause_lock);
+                printf("Lock disabled\n");
+                */
+
+                printf("[?] Who do u want to talk with: ");
+                /*client_choose_partner(client);*/
+                break;
+
+            case CLIENT_WANTS_TO_CHAT:
+                client_send_message(client, CLIENT_WANTS_TO_CHAT);
                 break;
 
             case ASK:
@@ -209,7 +225,7 @@ void * client_recv(void *pclient)
             case CLIENT_NOT_FOUND:
                 fprintf(stderr, "[!] Client not found\n");
                 break;
-            case DUMB_ASS:
+            case CLIENT_SAME_USER:
                 fprintf(stderr, "[!] You cant talk to yourself\n");
                 break;
             default:
@@ -288,12 +304,18 @@ void client_send_info(Client *client)
 
 }
 
+/*
 void client_choose_partner(Client *client)
 {
     char sendline[MAXWORD+1];
-    cstring_input("[?] Who do u want to talk with: ", sendline);
-    client_sendline(client, sendline, MAXWORD);
+    printf("[?] Who do u want to talk with: ");
+
+    pthread_mutex_lock(&pause_lock);
+    pause_thread = false;
+    pthread_cond_signal(&pause_cond);
+    pthread_mutex_unlock(&pause_lock);
 }
+*/
 
 void print_active_users(char buffer[])
 {
@@ -309,10 +331,6 @@ void client_sendline(Client *client, char buffer[], int limit)
     if (send(client->socket, buffer, limit, 0) < 0)
         ERROR_HANDLE();
 
-    /*
-    printf("* send buffer: %s", buffer);
-    printf("\n---------------------\n");
-    */
 }
 
 void client_recvline(Client *client, char buffer[], int limit)
@@ -329,11 +347,6 @@ void client_recvline(Client *client, char buffer[], int limit)
         case -1:
             ERROR_HANDLE();
     }
-    /*
-    printf("\n---------------------\n");
-    printf("* recv buffer: %s", buffer);
-    printf("\n---------------------\n");
-    */
 }
 
 void client_send_message(Client *client, MSG_TYPE request)
