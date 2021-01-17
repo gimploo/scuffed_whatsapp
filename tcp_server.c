@@ -378,8 +378,6 @@ int client_partner_chat_setup(Client *client)
         {
             client->available = other_client->available = false;
             client->chat_active = other_client->chat_active = true;
-            server_send_message(client, CLIENT_CHAT_START);
-            server_send_message(other_client, CLIENT_CHAT_START);
         }
 
         // he/she hasnt made anyone his/her friend 
@@ -404,6 +402,9 @@ int client_partner_chat_setup(Client *client)
         }
     }
     pthread_rwlock_unlock(&list.lock);
+
+    server_send_message(client, CLIENT_CHAT_START);
+    server_send_message(other_client, CLIENT_CHAT_START);
     return 0;
 }
 
@@ -438,15 +439,6 @@ void *client_partner_chat_thread_handler(void *pclient)
     printf("[LOG] %s <-> %s chat initiated\n", client->name, client->partner->name);
     while (client->chat_active)
     {
-        pthread_rwlock_wrlock(&list.lock);
-        if (client->partner == NULL)
-        {
-            client->chat_active = false;
-            server_sendline(client, mssg, MAXLINE);
-            break;
-        }
-        pthread_rwlock_unlock(&list.lock);
-
         switch(recv(client->socket, recvline, MAXLINE, 0 ))
         {
             case -1:
@@ -462,18 +454,10 @@ void *client_partner_chat_thread_handler(void *pclient)
                 return NULL;
         }
 
-        pthread_rwlock_wrlock(&list.lock);
-        if (client->partner == NULL)
-        {
-            client->chat_active = false;
-            server_sendline(client, mssg, MAXLINE);
-            pthread_rwlock_unlock(&list.lock);
-            break;
-        }
-        pthread_rwlock_unlock(&list.lock);
-
         snprintf(sendline, MAXSND, "%s: %s", client->name, recvline);
-        if (send(client->partner->socket, sendline, MAXLINE, 0) < 0)
+        if (client->partner == NULL)
+            break;
+        else if (send(client->partner->socket, sendline, MAXLINE, 0) < 0)
         {
             pthread_rwlock_wrlock(&list.lock);
             {
@@ -484,7 +468,6 @@ void *client_partner_chat_thread_handler(void *pclient)
             return NULL;
         }
     }
-    pthread_rwlock_unlock(&list.lock);
     return NULL;
 }
 
@@ -510,7 +493,10 @@ void server_remove_client(Client *client)
         {
             client->partner->available = true;
             if (client->partner->partner == client)
+            {
+                client->partner->chat_active = false;
                 client->partner->partner = NULL;
+            }
         }
         switch (ll_deletion(&list.head, client))
         {

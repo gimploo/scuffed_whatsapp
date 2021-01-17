@@ -187,6 +187,7 @@ void * client_recv(void *pclient)
 
             case CLIENT_CHAT_START:
                 client_send_message(client, CLIENT_CHAT_START);
+                printf("[!] CHAT MODE\n");
                 break;
 
             case CLIENT_UNAVAILABLE:
@@ -214,6 +215,7 @@ void * client_recv(void *pclient)
                     pause_thread = false;
                     pthread_cond_signal(&pause_cond);
                 pthread_mutex_unlock(&pause_lock);
+                printf("[!] Client partner set successfully\n");
                 break;
 
             default:

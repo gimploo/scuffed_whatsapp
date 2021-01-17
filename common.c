@@ -30,17 +30,17 @@ char * msg_to_cstr(MSG_TYPE msg)
 
 MSG_TYPE cstr_to_msg(char *cstring)
 {
-    if      (strcmp(cstring, "SUCCESS") == 0)                    return SUCCESS;
-    else if (strcmp(cstring, "FAILED") == 0)                     return FAILED;
-    else if (strcmp(cstring, "ACTIVE_USERS") == 0)               return ACTIVE_USERS;
-    else if (strcmp(cstring, "CLIENT_REGISTERED") == 0)          return CLIENT_REGISTERED;
-    else if (strcmp(cstring, "CLIENT_SAME_USER") == 0)           return CLIENT_SAME_USER;
-    else if (strcmp(cstring, "CLIENT_NOT_FOUND") == 0)           return CLIENT_NOT_FOUND;
-    else if (strcmp(cstring, "CLIENT_UNAVAILABLE") == 0)         return CLIENT_UNAVAILABLE;
-    else if (strcmp(cstring, "USERNAME_TAKEN") == 0)             return CLIENT_USERNAME_TAKEN;
-    else if (strcmp(cstring, "CLIENT_CHAT_SETUP") == 0)          return CLIENT_CHAT_SETUP;
-    else if (strcmp(cstring, "CLIENT_CHAT_START") == 0)          return CLIENT_CHAT_START;
-    else if (strcmp(cstring, "CLIENT_CHOOSE_PARTNER") == 0)      return CLIENT_CHOOSE_PARTNER;
-    else if (strcmp(cstring, "CLIENT_PARTNER_SELECTED") == 0)    return CLIENT_PARTNER_SELECTED;
-    else                                                         return INVALID;
+    if      (strcmp(cstring, "SUCCESS") == 0)                   return SUCCESS;
+    else if (strcmp(cstring, "FAILED") == 0)                    return FAILED;
+    else if (strcmp(cstring, "ACTIVE_USERS") == 0)              return ACTIVE_USERS;
+    else if (strcmp(cstring, "CLIENT_REGISTERED") == 0)         return CLIENT_REGISTERED;
+    else if (strcmp(cstring, "CLIENT_SAME_USER") == 0)          return CLIENT_SAME_USER;
+    else if (strcmp(cstring, "CLIENT_NOT_FOUND") == 0)          return CLIENT_NOT_FOUND;
+    else if (strcmp(cstring, "CLIENT_UNAVAILABLE") == 0)        return CLIENT_UNAVAILABLE;
+    else if (strcmp(cstring, "USERNAME_TAKEN") == 0)            return CLIENT_USERNAME_TAKEN;
+    else if (strcmp(cstring, "CLIENT_CHAT_SETUP") == 0)         return CLIENT_CHAT_SETUP;
+    else if (strcmp(cstring, "CLIENT_CHAT_START") == 0)         return CLIENT_CHAT_START;
+    else if (strcmp(cstring, "CLIENT_CHOOSE_PARTNER") == 0)     return CLIENT_CHOOSE_PARTNER;
+    else if (strcmp(cstring, "CLIENT_PARTNER_SELECTED") == 0)   return CLIENT_PARTNER_SELECTED;
+    else                                                        return INVALID;
 }
