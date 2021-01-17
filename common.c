@@ -11,20 +11,21 @@ void cstring_input(char *message, char buffer[])
 char * msg_to_cstr(MSG_TYPE msg)
 {
     switch (msg) {
-        case SUCCESS:                   return "SUCCESS";
-        case FAILED:                    return "FAILED";
-        case ASK:                       return "ASK";
-        case ACTIVE_USERS:              return "ACTIVE_USERS";
-        case CLIENT_SAME_USER:          return "CLIENT_SAME_USER";
-        case CLIENT_UNAVAILABLE:        return "CLIENT_UNAVAILABLE";
-        case CLIENT_NOT_FOUND:          return "CLIENT_NOT_FOUND";
-        case CLIENT_CHOOSE_PARTNER:     return "CLIENT_CHOOSE_PARTNER";
-        case CLIENT_USERNAME_TAKEN:     return "USERNAME_TAKEN";
-        case CLIENT_REGISTERED:         return "CLIENT_REGISTERED";
-        case CLIENT_CHAT_START:         return "CLIENT_CHAT_START";
-        case CLIENT_CHAT_SETUP:         return "CLIENT_CHAT_SETUP";
-        case CLIENT_PARTNER_SELECTED:   return "CLIENT_PARTNER_SELECTED";
-        default:                        return "INVALID_MESSAGE";
+        case SUCCESS:                       return "SUCCESS";
+        case FAILED:                        return "FAILED";
+        case ASK:                           return "ASK";
+        case ACTIVE_USERS:                  return "ACTIVE_USERS";
+        case CLIENT_SAME_USER:              return "CLIENT_SAME_USER";
+        case CLIENT_UNAVAILABLE:            return "CLIENT_UNAVAILABLE";
+        case CLIENT_NOT_FOUND:              return "CLIENT_NOT_FOUND";
+        case CLIENT_CHOOSE_PARTNER:         return "CLIENT_CHOOSE_PARTNER";
+        case CLIENT_USERNAME_TAKEN:         return "USERNAME_TAKEN";
+        case CLIENT_REGISTERED:             return "CLIENT_REGISTERED";
+        case CLIENT_CHAT_START:             return "CLIENT_CHAT_START";
+        case CLIENT_CHAT_SETUP:             return "CLIENT_CHAT_SETUP";
+        case CLIENT_PARTNER_SELECTED:       return "CLIENT_PARTNER_SELECTED";
+        case CLIENT_PARTNER_NOT_SET:        return "CLIENT_PARTNER_NOT_SET";
+        default:                            return "INVALID_MESSAGE";
     }
 }
 
@@ -42,5 +43,6 @@ MSG_TYPE cstr_to_msg(char *cstring)
     else if (strcmp(cstring, "CLIENT_CHAT_START") == 0)         return CLIENT_CHAT_START;
     else if (strcmp(cstring, "CLIENT_CHOOSE_PARTNER") == 0)     return CLIENT_CHOOSE_PARTNER;
     else if (strcmp(cstring, "CLIENT_PARTNER_SELECTED") == 0)   return CLIENT_PARTNER_SELECTED;
+    else if (strcmp(cstring, "CLIENT_PARTNER_NOT_SET") == 0)    return CLIENT_PARTNER_NOT_SET;
     else                                                        return INVALID;
 }

@@ -252,7 +252,8 @@ void * server_recv(void *pclient)
                 client_set_partner(client);
                 break;
              case CLIENT_CHAT_SETUP:
-                client_partner_chat_setup(client);
+                if (client_partner_chat_setup(client) != 0)
+                    server_send_message(client, CLIENT_PARTNER_NOT_SET);
                 break;
              case CLIENT_CHAT_START:
                 client_partner_chat_thread_create(client);

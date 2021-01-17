@@ -194,6 +194,10 @@ void * client_recv(void *pclient)
                 fprintf(stderr, "[!] Client Unavailable\n");
                 break;
 
+            case CLIENT_PARTNER_NOT_SET:
+                fprintf(stderr, "[!] Client failed to set partner\n");
+                break;
+
             case CLIENT_NOT_FOUND:
                 pthread_mutex_lock(&pause_lock);
                     pause_thread = false;
