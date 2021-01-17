@@ -44,7 +44,7 @@ int         does_user_exist(char *name);
 
 int main(void)
 {
-    printf("\n[LOG] Listening @ %d ...\n", SERVER_PORT);
+    printf("[LOG] Listening @ PORT %d ...\n\n", SERVER_PORT);
 
     // Initializing server
     int server_socket = server_init(SERVER_PORT, SERVER_BACKLOG);
@@ -176,7 +176,7 @@ int server_init(short port, int backlog)
 void print_active_users(List *list)
 {
     Client *tmp = list->head;
-    printf("\n-----------------\n");
+    printf("-----------------\n");
     printf("  Active Users\n");
     printf("-----------------\n");
     if (tmp == NULL)
@@ -203,17 +203,17 @@ void send_active_users(Client *client)
     int j, k, i = 0;
     
     pthread_rwlock_rdlock(&list.lock);
-    while (link1)
-    {
-        k = j = 0;
-        while (link1->name[k] != '\0')
+        while (link1)
         {
-            buffer[i++] = link1->name[k++];
+            k = j = 0;
+            while (link1->name[k] != '\0')
+            {
+                buffer[i++] = link1->name[k++];
+            }
+            buffer[i++] = '\n';
+            link1 = link1->next;
         }
-        buffer[i++] = '\n';
-        link1 = link1->next;
-    }
-    buffer[i-1]= '\0';
+        buffer[i-1]= '\0';
     pthread_rwlock_unlock(&list.lock);
 
     server_sendline(client, buffer, MAXLINE);
@@ -357,18 +357,19 @@ Client * client_set_partner(Client *client)
     } 
 
     pthread_rwlock_wrlock(&list.lock);
-    client->partner = other_client;
+        client->partner = other_client;
     pthread_rwlock_unlock(&list.lock);
+
+    server_send_message(client, CLIENT_PARTNER_SUCCESS);
 
     return 0;
 }
 
 int client_partner_chat_init(Client *client)
 {
-
     if (client->partner == NULL)
     {
-        fprintf(stderr, "[ERR] client_partner_chat_init: partner is null\n");
+        fprintf(stderr, "[ERR] client_partner_chat_init: client partner is null\n");
         return -1;
     }
     Client *other_client = client->partner;
@@ -380,13 +381,28 @@ int client_partner_chat_init(Client *client)
            server_send_message(other_client, CLIENT_WANTS_TO_CHAT);
            client->available = other_client->available = false;
         }
-        else 
+        else if (other_client->partner == NULL)
+        {
+            fprintf(stderr, "[LOG] client_parnter_chat_init: other clients partner is null\n");
+            pthread_rwlock_unlock(&list.lock);
             return -3;
+        }
+        else if (other_client->partner != client)
+        {
+            fprintf(stderr, "[LOG] client_parnter_chat_init: other clients partner is not client\n");
+            pthread_rwlock_unlock(&list.lock);
+            return -4;
+        }
+        else 
+        {
+            pthread_rwlock_unlock(&list.lock);
+            return -5;
+        }
     pthread_rwlock_unlock(&list.lock);
 
     if (client_partner_thread_handler(client) != 0 || client_partner_thread_handler(client->partner) != 0)
     {
-        return -4;
+        return 1;
     }
 
 
