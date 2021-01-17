@@ -82,15 +82,14 @@ void client_thread_init(Client *client)
 void * client_send(void *pclient)
 {
     Client *client = (Client *)pclient;
-    char prefix[MAXLINE];
-    char sendline[MAXLINE];
+    char prefix[MAXLINE+1];
+    char sendline[MAXLINE+1];
     char chr;
 
     snprintf(prefix, MAXLINE, "%s : ", client->name);
 
     while (connected)
     {
-        
         pthread_mutex_lock(&pause_lock);
             while (pause_thread)
             {
@@ -98,9 +97,15 @@ void * client_send(void *pclient)
             }
         pthread_mutex_unlock(&pause_lock);
 
+        // Takes user input
         cstring_input(prefix, sendline);
 
-        if (strcmp(sendline, "exit()") == 0)
+        // User input handling
+        if (strcmp(sendline, "\0") == 0)
+        {
+            continue;
+        }
+        else if (strcmp(sendline, "exit()") == 0)
         {
             printf("[?] Do you want to exit (y or n): ");
             if ((chr = getchar()) == 'n')
@@ -123,10 +128,6 @@ void * client_send(void *pclient)
             }
             CLEAR_STDIN();
         }
-        else if (strcmp(sendline , "\0") == 0)
-        {
-            continue;
-        }
         else if (strcmp(sendline, "cls") == 0)
         {
             system("clear");
@@ -139,7 +140,7 @@ void * client_send(void *pclient)
         }
         else if (strcmp(sendline, "m") == 0)
         {
-            client_send_message(client, CLIENT_WANTS_TO_CHAT);
+            client_send_message(client, CLIENT_CHAT_SETUP);
         }
         else if (strcmp(sendline, "c") == 0)
         {
@@ -148,12 +149,11 @@ void * client_send(void *pclient)
         else 
             client_sendline(client, sendline, MAXLINE);
 
-        /*sleep(1);*/
 
         // FIXME:
         // hackish way for the proc to slow down and not take 
         // concurrent or accidental inputs
-        /*CLEAR_STDIN();*/
+        CLEAR_STDIN();
     }
     return NULL;
 }
@@ -181,8 +181,12 @@ void * client_recv(void *pclient)
                 client_choose_partner(client);
                 break;
 
-            case CLIENT_WANTS_TO_CHAT:
-                client_send_message(client, CLIENT_WANTS_TO_CHAT);
+            case CLIENT_CHAT_SETUP:
+                client_send_message(client, CLIENT_CHAT_SETUP);
+                break;
+
+            case CLIENT_CHAT_START:
+                client_send_message(client, CLIENT_CHAT_START);
                 break;
 
             case CLIENT_UNAVAILABLE:
@@ -204,7 +208,8 @@ void * client_recv(void *pclient)
                     pthread_cond_signal(&pause_cond);
                 pthread_mutex_unlock(&pause_lock);
                 break;
-            case CLIENT_PARTNER_SUCCESS:
+
+            case CLIENT_PARTNER_SELECTED:
                 pthread_mutex_lock(&pause_lock);
                     pause_thread = false;
                     pthread_cond_signal(&pause_cond);
