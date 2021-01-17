@@ -1,13 +1,6 @@
 #include "common.h"
 #include "linkedlist.h"
 
-typedef struct {
-    struct client *client1;
-    struct client *client2;
-    volatile bool active;
-    pthread_rwlock_t lock;
-} Client_Pair;
-
 List list = {
     .head = NULL,
     .count = 0,
@@ -445,17 +438,14 @@ void *client_partner_chat_thread_handler(void *pclient)
     printf("[LOG] %s <-> %s chat initiated\n", client->name, client->partner->name);
     while (client->chat_active)
     {
+        pthread_rwlock_wrlock(&list.lock);
         if (client->partner == NULL)
         {
-            pthread_rwlock_wrlock(&list.lock);
-            {
-                client->partner->available = true;
-                client->chat_active = false;
-            }
-            pthread_rwlock_unlock(&list.lock);
+            client->chat_active = false;
             server_sendline(client, mssg, MAXLINE);
-            return NULL;
+            break;
         }
+        pthread_rwlock_unlock(&list.lock);
 
         switch(recv(client->socket, recvline, MAXLINE, 0 ))
         {
@@ -471,20 +461,30 @@ void *client_partner_chat_thread_handler(void *pclient)
                 server_sendline(client->partner, mssg, MAXLINE);
                 return NULL;
         }
+
+        pthread_rwlock_wrlock(&list.lock);
+        if (client->partner == NULL)
+        {
+            client->chat_active = false;
+            server_sendline(client, mssg, MAXLINE);
+            pthread_rwlock_unlock(&list.lock);
+            break;
+        }
+        pthread_rwlock_unlock(&list.lock);
+
         snprintf(sendline, MAXSND, "%s: %s", client->name, recvline);
         if (send(client->partner->socket, sendline, MAXLINE, 0) < 0)
         {
             pthread_rwlock_wrlock(&list.lock);
             {
-                client->partner->available = true;
                 client->chat_active = false;
             }
             pthread_rwlock_unlock(&list.lock);
             fprintf(stderr, "[ERR] client2 send error\n");
-            break;
+            return NULL;
         }
-            
     }
+    pthread_rwlock_unlock(&list.lock);
     return NULL;
 }
 
