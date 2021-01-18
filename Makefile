@@ -4,6 +4,7 @@ OBJS= linkedlist.o common.o
 BIN= client server
 
 all: $(BIN)
+	rm *.o
 
 client: tcp_client.c common.o
 	$(CC) $(CCFLAGS) -o client tcp_client.c common.o
@@ -18,4 +19,4 @@ common.o: common.c
 	$(CC) $(CCFLAGS) -c common.c
 
 clean: 
-	rm $(BIN) $(OBJS) 
+	rm $(BIN)
