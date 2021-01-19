@@ -22,7 +22,7 @@ A fun little project for me to learn about socket programming and how to impleme
     [x] Multi threading  
     [x] Unique username setup logic
     [x] Group chat functionality
-    [ ] Private one to one connection 
+    [x] Private one to one connection 
     [ ] Server and client optimizations
 
 
