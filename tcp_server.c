@@ -1,5 +1,6 @@
 #include "common.h"
 #include "linkedlist.h"
+#include "thread_pool.h"
 
 List list = {
     .head = NULL,
@@ -31,16 +32,19 @@ int         client_partner_chat_thread_create(Client *client);
 void *      client_partner_chat_thread_handler(void *pclient_pair);
     
 // miscellaneous
-void        print_active_users(List *list);
+void        print_active_users(List *);
 void        send_active_users(Client *);
-int         does_user_exist(char *name);
+int         does_user_exist(char *);
 
 int main(void)
 {
+    system("clear");
     printf("[LOG] Listening @ PORT %d ...\n", SERVER_PORT);
 
     // Initializing server
     int server_socket = server_init(SERVER_PORT, SERVER_BACKLOG);
+
+    // TODO: Implement Thread_pool
 
     /*for (int i = 0;i < 2; i++)*/
     for(;;)
@@ -59,7 +63,6 @@ int main(void)
         }
 
     }
-
     // Freeing the client list
     ll_free(list.head);
 
@@ -67,7 +70,7 @@ int main(void)
 
 void client_get_info(Client *client)
 {
-    char recvline[MAXWORD];
+    char recvline[MAXWORD+1];
 
     // Gets user name from client
     server_recvline(client, recvline, MAXWORD);
@@ -130,7 +133,7 @@ Client * server_accept_connection(int server_socket)
     int client_socket;
     struct sockaddr_in addr;
     socklen_t addr_len;
-    char client_address[MAXLINE];
+    char client_address[MAXLINE+1];
 
     if ((client_socket = 
                 accept(server_socket,(struct sockaddr *)&addr, &addr_len)) < 0)
@@ -168,30 +171,27 @@ int server_init(short port, int backlog)
 
 void print_active_users(List *list)
 {
+    printf("[LOG] Active user list: ");
     Client *tmp = list->head;
-    printf("-----------------\n");
-    printf("  Active Users\n");
-    printf("-----------------\n");
     if (tmp == NULL)
-        printf("(~ o ~) . z Z)\n");
+        printf("none\n");
     else
     {
-        int si = 1;
         pthread_rwlock_rdlock(&list->lock);
         while (tmp)
         {
-            printf("%i. %s\n", si++, tmp->name);
+            printf(" %s ->", tmp->name);
             tmp = tmp->next;
         }
         pthread_rwlock_unlock(&list->lock);
+        printf(" NULL\n");
     }
-    printf("-----------------\n");
 
 }
 
 void send_active_users(Client *client)
 {
-    char buffer[MAXLINE];
+    char buffer[MAXLINE+1];
     Client *link1 = list.head;
     int j, k, i = 0;
     
@@ -215,7 +215,7 @@ void send_active_users(Client *client)
 void * server_recv(void *pclient)
 {
     Client *client = (Client *)pclient;
-    char recvline[MAXLINE];
+    char recvline[MAXLINE+1];
 
     while (true)
     {
