@@ -1,10 +1,10 @@
 #include "common.h"
 
-void cstring_input(char *message, char buffer[])
+void cstring_input(char *message, char buffer[], int limit)
 {
     if (message != NULL)
         printf("%s", message);
-    fgets(buffer, MAXLINE, stdin);
+    fgets(buffer, limit, stdin);
     buffer[strlen(buffer)-1] = '\0';
 }
 

@@ -17,7 +17,6 @@
 #include <pthread.h>
 #include <errno.h>
 #include <ctype.h>
-#include <assert.h>
 
 #define SERVER_PORT 18000 
 #define MAXMSG 25
@@ -35,10 +34,6 @@
 
 #define PERROR() (fprintf(stderr, "[!] ERROR ("__FILE__" :%d): %s\n", __LINE__, strerror(errno)))
 
-// fflush doesnt work on wsl2 D: 
-#define CLEAR_STDIN() {\
-    while (getchar() != '\n');\
-}
 
 typedef enum {
     SUCCESS,
@@ -80,7 +75,7 @@ typedef struct client {
 } Client;
 
 // Takes input from the user and stores in buffer[]
-void cstring_input(char *message, char buffer[]);
+void cstring_input(char *message, char buffer[], int limit);
 
 char * msg_to_cstr(MSG_TYPE msg);
 
