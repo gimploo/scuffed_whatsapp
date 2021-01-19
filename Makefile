@@ -1,6 +1,6 @@
 CC= gcc
 CCFLAGS= -Wall -Wextra -pedantic -g -pthread
-OBJS= linkedlist.o common.o
+OBJS= linkedlist.o common.o thread_pool.o
 BIN= client server
 
 all: $(BIN)
@@ -17,6 +17,9 @@ linkedlist.o: linkedlist.c
 
 common.o: common.c
 	$(CC) $(CCFLAGS) -c common.c
+
+thread_pool.o: thread_pool.c
+	$(CC) $(CCFLAGS) -c thread_pool.c
 
 clean: 
 	rm $(BIN)
