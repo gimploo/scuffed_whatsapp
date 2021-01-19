@@ -17,6 +17,7 @@ void        client_sendline(Client *client, char buffer[], int limit);
 void        client_recvline(Client *client, char buffer[], int limit);
 void        client_send_message(Client *client, MSG_TYPE request);
 void        client_choose_partner(Client *client);
+int         menu(Client *client);
 
 int main(int argc, char *argv[])
 {
@@ -98,26 +99,17 @@ void * client_send(void *pclient)
         pthread_mutex_unlock(&pause_lock);
 
         // Takes user input
-        cstring_input(prefix, sendline);
+        do {
+            cstring_input(prefix, sendline, MAXLINE);
+        } while (strcmp(sendline, "\0") == 0);
 
         // User input handling
-        if (strcmp(sendline, "\0") == 0)
-        {
-            continue;
-        }
-        else if (strcmp(sendline, "exit()") == 0)
+        if (strcmp(sendline, "exit()") == 0)
         {
             printf("[?] Do you want to exit (y or n): ");
             if ((chr = getchar()) == 'n')
             {
-                if (!pause_thread)
-                {
-                    cstring_input(NULL, sendline);
-                }
-                else 
-                {
-                    continue;
-                }
+                cstring_input(NULL, sendline, MAXLINE);
             }
             else
             {
@@ -126,34 +118,22 @@ void * client_send(void *pclient)
                 pthread_mutex_unlock(&connec_lock);
                 return NULL;
             }
-            CLEAR_STDIN();
         }
         else if (strcmp(sendline, "cls") == 0)
         {
             system("clear");
             continue;
         }
-        //TESTING
-        else if (strcmp(sendline , "a") == 0)
+        else if (strcmp(sendline, "menu()") == 0)
         {
-            client_send_message(client, ACTIVE_USERS);
-        }
-        else if (strcmp(sendline, "m") == 0)
-        {
-            client_send_message(client, CLIENT_CHAT_SETUP);
-        }
-        else if (strcmp(sendline, "c") == 0)
-        {
-            client_send_message(client, CLIENT_CHOOSE_PARTNER);
+            menu(client);
         }
         else 
+        {
             client_sendline(client, sendline, MAXLINE);
+            while(getchar() != '\n');
+        }
 
-
-        // FIXME:
-        // hackish way for the proc to slow down and not take 
-        // concurrent or accidental inputs
-        CLEAR_STDIN();
     }
     return NULL;
 }
@@ -161,7 +141,7 @@ void * client_send(void *pclient)
 void * client_recv(void *pclient)
 {
     Client *client = (Client *)pclient;
-    char recvline[MAXLINE];
+    char recvline[MAXLINE+1];
 
     while (connected)
     {
@@ -187,7 +167,7 @@ void * client_recv(void *pclient)
 
             case CLIENT_CHAT_START:
                 client_send_message(client, CLIENT_CHAT_START);
-                printf("[!] CHAT MODE\n");
+                printf("\n[!] CHAT MODE\n");
                 break;
 
             case CLIENT_UNAVAILABLE:
@@ -195,13 +175,14 @@ void * client_recv(void *pclient)
                 break;
 
             case CLIENT_PARTNER_NOT_SET:
-                fprintf(stderr, "[!] Client failed to set partner\n");
+                fprintf(stderr, 
+                        "[!] He/she didnt add you as their friend\n");
                 break;
 
             case CLIENT_NOT_FOUND:
                 pthread_mutex_lock(&pause_lock);
                     pause_thread = false;
-                    fprintf(stderr, "[!] Client not found\n");
+                    fprintf(stderr, "[!] He/she doesnt exist\n");
                     pthread_cond_signal(&pause_cond);
                 pthread_mutex_unlock(&pause_lock);
                 break;
@@ -219,7 +200,7 @@ void * client_recv(void *pclient)
                     pause_thread = false;
                     pthread_cond_signal(&pause_cond);
                 pthread_mutex_unlock(&pause_lock);
-                printf("[!] Client partner set successfully\n");
+                printf("[!] He/she is now your friend.\n");
                 break;
 
             default:
@@ -231,12 +212,45 @@ void * client_recv(void *pclient)
 
 }
 
+int menu(Client *client)
+{
+    printf("---- MENU ----\n");
+    printf("a. Add a friend\n");
+    printf("b. Text a friend\n");
+    printf("c. Check whose online\n");
+    printf("--------------\n");
+
+    char choice[4];
+    do {
+        memset(choice, 0, 4);
+        cstring_input("choice (a-c): ", choice, 3);
+    } while (choice[0] < 'a' || choice[0] > 'z');
+
+    switch (choice[0])
+    {
+        case 'a':
+            client_send_message(client, CLIENT_CHOOSE_PARTNER);
+            break;
+        case 'b':
+            client_send_message(client, CLIENT_CHAT_SETUP);
+            break;
+        case 'c':
+            client_send_message(client, ACTIVE_USERS);
+            break;
+        default:
+            fprintf(stderr, "[!] Invalid choice\n");
+            return 1;
+    }
+    sleep(1);
+    return 0;
+}
+
 Client * client_init(short server_port)
 {
     Client *client = malloc(sizeof(Client));
 
     do {
-        cstring_input("[?] Name: ", client->name);
+        cstring_input("[?] Name: ", client->name, MAXWORD);
     } while(strcmp(client->name, "\0") == 0);
 
     client->available = true;
@@ -265,9 +279,9 @@ Client * client_init(short server_port)
 
 void client_send_info(Client *client)
 {
-    char recvline[MAXLINE];
-    char new_name[MAXWORD];
-    char name_taken[MAXWORD];
+    char recvline[MAXLINE+1];
+    char new_name[MAXWORD+1];
+    char name_taken[MAXWORD+1];
     bool username_is_changed = false;
 
     client_sendline(client, client->name, MAXWORD);
@@ -282,7 +296,7 @@ void client_send_info(Client *client)
         printf("[!] That name is taken\n");
         username_is_changed = true;
         do {
-            cstring_input("[?] New Name: ", new_name);
+            cstring_input("[?] New Name: ", new_name, MAXWORD);
         } while (strcmp(new_name, name_taken) == 0 || strcmp(new_name, "\0") == 0);
 
         client_sendline(client, new_name, MAXWORD);
@@ -302,7 +316,7 @@ void client_send_info(Client *client)
 void client_choose_partner(Client *client)
 {
     char sendline[MAXWORD+1];
-    cstring_input("[?] Who do u want to talk with: ", sendline);
+    cstring_input("[?] Who do u want to talk with: ", sendline, MAXWORD);
     client_sendline(client, sendline, MAXWORD);
 }
 
