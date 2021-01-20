@@ -8,7 +8,7 @@ void cstring_input(char *message, char buffer[], int limit)
     buffer[strlen(buffer)-1] = '\0';
 }
 
-char * msg_to_cstr(MSG_TYPE msg)
+char * msg_to_cstr(Msg_Type msg)
 {
     switch (msg) {
         case SUCCESS:                       return "SUCCESS";
@@ -25,11 +25,15 @@ char * msg_to_cstr(MSG_TYPE msg)
         case CLIENT_CHAT_SETUP:             return "CLIENT_CHAT_SETUP";
         case CLIENT_PARTNER_SELECTED:       return "CLIENT_PARTNER_SELECTED";
         case CLIENT_PARTNER_NOT_SET:        return "CLIENT_PARTNER_NOT_SET";
+        case CLIENT_GROUP_EMPTY:            return "CLIENT_GROUP_EMPTY";
+        case CLIENT_GROUP_ADD_MEMBER:       return "CLIENT_GROUP_ADD_MEMBER";
+        case CLIENT_GROUP_CHAT_SETUP:       return "CLIENT_GROUP_CHAT_SETUP";
+        case CLIENT_GROUP_CHAT_START:       return "CLIENT_GROUP_CHAT_START";
         default:                            return "INVALID_MESSAGE";
     }
 }
 
-MSG_TYPE cstr_to_msg(char *cstring)
+Msg_Type cstr_to_msg(char *cstring)
 {
     if      (strcmp(cstring, "SUCCESS") == 0)                   return SUCCESS;
     else if (strcmp(cstring, "FAILED") == 0)                    return FAILED;
@@ -44,5 +48,9 @@ MSG_TYPE cstr_to_msg(char *cstring)
     else if (strcmp(cstring, "CLIENT_CHOOSE_PARTNER") == 0)     return CLIENT_CHOOSE_PARTNER;
     else if (strcmp(cstring, "CLIENT_PARTNER_SELECTED") == 0)   return CLIENT_PARTNER_SELECTED;
     else if (strcmp(cstring, "CLIENT_PARTNER_NOT_SET") == 0)    return CLIENT_PARTNER_NOT_SET;
+    else if (strcmp(cstring ,"CLIENT_GROUP_EMPTY") == 0)        return CLIENT_GROUP_EMPTY;
+    else if (strcmp(cstring, "CLIENT_GROUP_CHAT_START") == 0)   return CLIENT_GROUP_CHAT_START;
+    else if (strcmp(cstring, "CLIENT_GROUP_CHAT_SETUP") == 0)   return CLIENT_GROUP_CHAT_SETUP;
+    else if (strcmp(cstring, "CLIENT_GROUP_ADD_MEMBER") == 0)   return CLIENT_GROUP_ADD_MEMBER;
     else                                                        return INVALID;
 }

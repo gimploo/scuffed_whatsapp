@@ -23,6 +23,7 @@
 #define MAXSND 6144
 #define MAXLINE 4096
 #define MAXWORD 1024
+#define MAX_GROUP_MEMBERS 3
 #define LOCALHOST "127.0.0.1"
 #define IPV4_STRLEN 16
 #define SERVER_BACKLOG 10
@@ -53,8 +54,13 @@ typedef enum {
     CLIENT_NOT_FOUND,
     CLIENT_CHOOSE_PARTNER,
     CLIENT_PARTNER_SELECTED,
-    CLIENT_PARTNER_NOT_SET
-} MSG_TYPE;
+    CLIENT_PARTNER_NOT_SET,
+
+    CLIENT_GROUP_EMPTY,
+    CLIENT_GROUP_ADD_MEMBER,
+    CLIENT_GROUP_CHAT_SETUP,
+    CLIENT_GROUP_CHAT_START
+} Msg_Type;
 
 typedef struct client {
 
@@ -64,10 +70,14 @@ typedef struct client {
     char straddr[IPV4_STRLEN+1];
     bool available;
 
-    // chat 
+    // Private chat 
     struct client *partner;
     volatile bool chat_active;
     pthread_rwlock_t lock;
+
+    // Group chat
+    struct client **group_array;
+    int top;
 
     // list
     struct client *next;
@@ -77,8 +87,8 @@ typedef struct client {
 // Takes input from the user and stores in buffer[]
 void cstring_input(char *message, char buffer[], int limit);
 
-char * msg_to_cstr(MSG_TYPE msg);
+char * msg_to_cstr(Msg_Type msg);
 
-MSG_TYPE cstr_to_msg(char *cstring);
+Msg_Type cstr_to_msg(char *cstring);
 
 #endif
