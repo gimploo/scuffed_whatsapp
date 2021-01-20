@@ -15,9 +15,10 @@ void        print_active_users(char buffer[]);
 void        client_send_info(Client *client);
 void        client_sendline(Client *client, char buffer[], int limit);
 void        client_recvline(Client *client, char buffer[], int limit);
-void        client_send_message(Client *client, MSG_TYPE request);
+void        client_send_request(Client *client, Msg_Type request);
 void        client_choose_partner(Client *client);
 int         menu(Client *client);
+void        client_choose_group_member(Client *client);
 
 int main(int argc, char *argv[])
 {
@@ -39,7 +40,6 @@ int main(int argc, char *argv[])
             printf("[!] Quiting!\n");
             return 1;
         }
-        CLEAR_STDIN();
     }
     else
     {
@@ -160,14 +160,30 @@ void * client_recv(void *pclient)
                 pthread_mutex_unlock(&pause_lock);
                 client_choose_partner(client);
                 break;
+                
+            case CLIENT_GROUP_ADD_MEMBER:
+                pthread_mutex_lock(&pause_lock);
+                    pause_thread = true;
+                pthread_mutex_unlock(&pause_lock);
+                client_choose_group_member(client);
+                break;
 
             case CLIENT_CHAT_SETUP:
-                client_send_message(client, CLIENT_CHAT_SETUP);
+                client_send_request(client, CLIENT_CHAT_SETUP);
                 break;
 
             case CLIENT_CHAT_START:
-                client_send_message(client, CLIENT_CHAT_START);
-                printf("\n[!] CHAT MODE\n");
+                client_send_request(client, CLIENT_CHAT_START);
+                printf("\n[!] PRIVATE CHAT MODE\n");
+                break;
+
+            case CLIENT_GROUP_CHAT_START:
+                client_send_request(client, CLIENT_GROUP_CHAT_START);
+                printf("\n[!] GROUP CHAT MODE\n");
+                break;
+
+            case CLIENT_GROUP_EMPTY:
+                printf("[!] Groups empty\n");
                 break;
 
             case CLIENT_UNAVAILABLE:
@@ -204,7 +220,7 @@ void * client_recv(void *pclient)
                 break;
 
             default:
-                printf("\n%s\n", recvline);
+                printf("\n%s", recvline);
                 break;
         }
     }
@@ -216,8 +232,10 @@ int menu(Client *client)
 {
     printf("---- MENU ----\n");
     printf("a. Add a friend\n");
-    printf("b. Text a friend\n");
-    printf("c. Check whose online\n");
+    printf("b. Add a friend to your group\n");
+    printf("c. Text a friend\n");
+    printf("d. Broadcast to friends\n");
+    printf("e. Check whose online\n");
     printf("--------------\n");
 
     char choice[4];
@@ -229,13 +247,19 @@ int menu(Client *client)
     switch (choice[0])
     {
         case 'a':
-            client_send_message(client, CLIENT_CHOOSE_PARTNER);
+            client_send_request(client, CLIENT_CHOOSE_PARTNER);
             break;
         case 'b':
-            client_send_message(client, CLIENT_CHAT_SETUP);
+            client_send_request(client, CLIENT_GROUP_ADD_MEMBER);
             break;
         case 'c':
-            client_send_message(client, ACTIVE_USERS);
+            client_send_request(client, CLIENT_CHAT_SETUP);
+            break;
+        case 'd':
+            client_send_request(client, CLIENT_GROUP_CHAT_SETUP);
+            break;
+        case 'e':
+            client_send_request(client, ACTIVE_USERS);
             break;
         default:
             fprintf(stderr, "[!] Invalid choice\n");
@@ -353,7 +377,14 @@ void client_recvline(Client *client, char buffer[], int limit)
     }
 }
 
-void client_send_message(Client *client, MSG_TYPE request)
+void client_send_request(Client *client, Msg_Type request)
 {
     client_sendline(client, msg_to_cstr(request), MAXMSG);
+}
+
+void client_choose_group_member(Client *client)
+{
+    char sendline[MAXWORD+1];
+    cstring_input("[?] Who do u want to add to the group: ", sendline, MAXWORD);
+    client_sendline(client, sendline, MAXWORD);
 }
