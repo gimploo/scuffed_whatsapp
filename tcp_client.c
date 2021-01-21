@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
             printf("[!] Quiting!\n");
             return 1;
         }
+        while (getchar() != '\n');
     }
     else
     {
@@ -183,16 +184,19 @@ void * client_recv(void *pclient)
                 break;
 
             case CLIENT_GROUP_EMPTY:
-                printf("[!] Groups empty\n");
+                printf("[!] Group is empty\n");
                 break;
 
             case CLIENT_UNAVAILABLE:
                 fprintf(stderr, "[!] Client Unavailable\n");
                 break;
 
+            case CLIENT_PARTNER_NULL:
+                fprintf(stderr, "[!] Parnter not selected\n");
+                break;
+
             case CLIENT_PARTNER_NOT_SET:
-                fprintf(stderr, 
-                        "[!] He/she didnt add you as their friend\n");
+                fprintf(stderr, "[!] He/she didnt add you as their friend\n");
                 break;
 
             case CLIENT_NOT_FOUND:
@@ -219,6 +223,16 @@ void * client_recv(void *pclient)
                 printf("[!] He/she is now your friend.\n");
                 break;
 
+            case CLIENT_GROUP_MEMBER_ADDED:
+                pthread_mutex_lock(&pause_lock);
+                    pause_thread = false;
+                    pthread_cond_signal(&pause_cond);
+                pthread_mutex_unlock(&pause_lock);
+                printf("[!] He/she is now in your group.\n");
+                break;
+            case FAILED:
+                fprintf(stderr, "[!] Past execution failed\n");
+                break;
             default:
                 printf("\n%s", recvline);
                 break;
