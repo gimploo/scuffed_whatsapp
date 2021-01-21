@@ -33,8 +33,11 @@ int         client_partner_chat_thread_create(Client *client);
 void *      client_partner_chat_thread_handler(void *pclient_pair);
     
 // Group chat
-bool        client_group_add_member(Client *client);
+bool        client_group_add_member(Client *client, Client *member);
 void *      client_group_broadcast_thread_handler(void *pclient);
+int         client_group_chat_thread_create(Client *client);
+Client *    client_group_get_member(Client *client);
+void        client_group_print_members(Client *client);
 
 // miscellaneous
 void        print_active_users(List *);
@@ -134,23 +137,11 @@ Client * client_create_node(int socket, char addr[])
     return client;
 }
 
-bool client_group_add_member(Client *client)
+bool client_group_add_member(Client *client, Client *member)
 {
-    char recvline[MAXWORD+1];
-    server_recvline(client, recvline, MAXWORD);
-
-    Client *member = client_get_by_name_from_list(recvline);
-
     pthread_rwlock_wrlock(&list.lock);
     {
-        if (member == NULL || client == NULL)
-        {
-            fprintf(stderr, "[ERR] client_group_add_member: passed null pointers as arguments");
-            server_send_response(client, CLIENT_NOT_FOUND);
-            pthread_rwlock_unlock(&list.lock);
-            return false;
-        }
-        else if (client->top == MAX_GROUP_MEMBERS-1)
+        if (client->top == MAX_GROUP_MEMBERS-1)
         {
             fprintf(stderr, "[ERR] client_group_add_member: OVERFLOW\n");
             pthread_rwlock_unlock(&list.lock);
@@ -159,12 +150,32 @@ bool client_group_add_member(Client *client)
 
         printf("[LOG] %s added %s to the group\n", client->name, member->name);
         client->group_array[++client->top] = member;
-        server_send_response(client, CLIENT_GROUP_ADD_MEMBER);
+        server_send_response(client, CLIENT_GROUP_MEMBER_ADDED);
     }
     pthread_rwlock_unlock(&list.lock);
+    client_group_print_members(client);
     return true;
 }
 
+void client_group_print_members(Client *client)
+{
+    printf("---- GROUP MEMBERS ----\n");
+    pthread_rwlock_rdlock(&client->lock);
+    {
+        Client *node = client->group_array[client->top];
+        if (node == NULL)
+        {
+            fprintf(stderr, "client_group_print_members: node is null\n");
+        }
+        while (node)
+        {
+            printf("%s -> ", node->name);
+            node++;
+        }
+    }
+    pthread_rwlock_unlock(&client->lock);
+    printf("-----------------------\n");
+}
 
 int client_group_chat_start(Client *client)
 {
@@ -180,17 +191,9 @@ int client_group_chat_start(Client *client)
         node++;
     }
     
-    pthread_t tid1;
-    if (pthread_create(&tid1, NULL, client_group_broadcast_thread_handler, client))
-    {
-        fprintf(stderr, "[!] client_group_chat_start: unable to create a thread\n");
-    }
-
+    client_group_chat_thread_create(client);
     return 0;
 }
-
-
-
 
 Client * server_accept_connection(int server_socket)
 {
@@ -280,6 +283,7 @@ void * server_recv(void *pclient)
 {
     Client *client = (Client *)pclient;
     char recvline[MAXLINE+1];
+    Client *member = NULL;
 
     while (true)
     {
@@ -304,34 +308,85 @@ void * server_recv(void *pclient)
                 server_send_response(client, ACTIVE_USERS);
                 send_active_users(client);
                 break;
+
             case CLIENT_USERNAME_TAKEN:
                 server_send_response(client, CLIENT_USERNAME_TAKEN);
                 server_recvline(client, recvline, MAXWORD);
                 break;
+
             case CLIENT_REGISTERED:
                 server_send_response(client, CLIENT_REGISTERED);
                 break;
+
              case CLIENT_CHOOSE_PARTNER:
                 server_send_response(client, CLIENT_CHOOSE_PARTNER);
                 client_set_partner(client);
                 break;
+
              case CLIENT_CHAT_SETUP:
-                if (client_partner_chat_setup(client) != 0)
-                    server_send_response(client, CLIENT_PARTNER_NOT_SET);
+                switch (client_partner_chat_setup(client))
+                {
+                    case -1:
+                        server_send_response(client, CLIENT_PARTNER_NULL);
+                        break;
+                    case -2:
+                    case -3:
+                    case -4:
+                        server_send_response(client, CLIENT_PARTNER_NOT_SET);
+                        break;
+                }
                 break;
+
              case CLIENT_CHAT_START:
                 client_partner_chat_thread_create(client);
                 break;
+
              case CLIENT_GROUP_ADD_MEMBER:
                 server_send_response(client, CLIENT_GROUP_ADD_MEMBER);
-                client_group_add_member(client);
+                member = client_group_get_member(client);
+                if (member == NULL)
+                {
+                    server_send_response(client, FAILED);
+                    break;
+                }
+                client_group_add_member(client, member);
                 break;
+
+             case CLIENT_GROUP_CHAT_SETUP:
+                client_group_chat_start(client);
+                break;
+
+             case CLIENT_GROUP_CHAT_START:
+                client_group_chat_thread_create(client);
+                break;
+
              default:
-                fprintf(stderr, "[ERR] server_request: INVALID\n");
+                fprintf(stderr, "[ERR] server_request: request is invalid\n");
                 break;
         }
     }
     return NULL;
+}
+
+Client *client_group_get_member(Client *client)
+{
+    char recvline[MAXWORD+1];
+    server_recvline(client, recvline, MAXWORD);
+
+    Client *member = client_get_by_name_from_list(recvline);
+    if (member == NULL)
+    {
+        fprintf(stderr, "[ERR] client_group_add_member: member not found\n");
+        server_send_response(client, CLIENT_NOT_FOUND);
+        return NULL;
+    }
+    else if (member == client)
+    {
+        fprintf(stderr, "[ERR] client_group_add_member: client choose itself\n");
+        server_send_response(client, CLIENT_SAME_USER);
+        return NULL;
+    }
+    return member;
 }
 
 int server_sendline(Client *client, char buffer[], int limit)
@@ -454,7 +509,7 @@ int client_partner_chat_setup(Client *client)
         {
             fprintf(stderr, "[LOG] client_partner_chat_setup: other clients partner is null\n");
             pthread_rwlock_unlock(&list.lock);
-            return -3;
+            return -2;
         }
 
         // he/she hasnt made you his/her friend
@@ -462,12 +517,12 @@ int client_partner_chat_setup(Client *client)
         {
             fprintf(stderr, "[LOG] client_partner_chat_setup: other clients partner is not client\n");
             pthread_rwlock_unlock(&list.lock);
-            return -4;
+            return -3;
         }
         else 
         {
             fprintf(stderr, "[LOG] client_partner_chat_setup: unkown error\n");
-            return -5;
+            return -4;
         }
     }
     pthread_rwlock_unlock(&list.lock);
@@ -495,6 +550,26 @@ int client_partner_chat_thread_create(Client *client)
 
     return 0;
 }
+
+int client_group_chat_thread_create(Client *client)
+{
+    pthread_t tid1;
+
+    if (pthread_create(&tid1, NULL, client_group_broadcast_thread_handler, client) != 0)
+    {
+        fprintf(stderr, "[ERR] client_group_broadcast_thread_handler: unable to create thread\n");
+       return errno;
+    }
+
+    if (pthread_join(tid1, NULL) != 0)
+    {
+        fprintf(stderr, "[ERR] client_group_broadcast_thread_handler: unable to join client thread\n");
+       return errno;
+    }
+
+    return 0;
+}
+
 void *client_group_broadcast_thread_handler(void *pclient)
 {
     char recvline[MAXLINE+1];
