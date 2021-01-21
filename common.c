@@ -23,12 +23,14 @@ char * msg_to_cstr(Msg_Type msg)
         case CLIENT_REGISTERED:             return "CLIENT_REGISTERED";
         case CLIENT_CHAT_START:             return "CLIENT_CHAT_START";
         case CLIENT_CHAT_SETUP:             return "CLIENT_CHAT_SETUP";
+        case CLIENT_PARTNER_NULL:           return "CLIENT_PARTNER_NULL";
         case CLIENT_PARTNER_SELECTED:       return "CLIENT_PARTNER_SELECTED";
         case CLIENT_PARTNER_NOT_SET:        return "CLIENT_PARTNER_NOT_SET";
         case CLIENT_GROUP_EMPTY:            return "CLIENT_GROUP_EMPTY";
         case CLIENT_GROUP_ADD_MEMBER:       return "CLIENT_GROUP_ADD_MEMBER";
         case CLIENT_GROUP_CHAT_SETUP:       return "CLIENT_GROUP_CHAT_SETUP";
         case CLIENT_GROUP_CHAT_START:       return "CLIENT_GROUP_CHAT_START";
+        case CLIENT_GROUP_MEMBER_ADDED:     return "CLIENT_GROUP_MEMBER_ADDED";
         default:                            return "INVALID_MESSAGE";
     }
 }
@@ -46,11 +48,13 @@ Msg_Type cstr_to_msg(char *cstring)
     else if (strcmp(cstring, "CLIENT_CHAT_SETUP") == 0)         return CLIENT_CHAT_SETUP;
     else if (strcmp(cstring, "CLIENT_CHAT_START") == 0)         return CLIENT_CHAT_START;
     else if (strcmp(cstring, "CLIENT_CHOOSE_PARTNER") == 0)     return CLIENT_CHOOSE_PARTNER;
+    else if (strcmp(cstring, "CLIENT_PARNTER_NULL") == 0)       return CLIENT_PARTNER_NULL;
     else if (strcmp(cstring, "CLIENT_PARTNER_SELECTED") == 0)   return CLIENT_PARTNER_SELECTED;
     else if (strcmp(cstring, "CLIENT_PARTNER_NOT_SET") == 0)    return CLIENT_PARTNER_NOT_SET;
     else if (strcmp(cstring ,"CLIENT_GROUP_EMPTY") == 0)        return CLIENT_GROUP_EMPTY;
     else if (strcmp(cstring, "CLIENT_GROUP_CHAT_START") == 0)   return CLIENT_GROUP_CHAT_START;
     else if (strcmp(cstring, "CLIENT_GROUP_CHAT_SETUP") == 0)   return CLIENT_GROUP_CHAT_SETUP;
     else if (strcmp(cstring, "CLIENT_GROUP_ADD_MEMBER") == 0)   return CLIENT_GROUP_ADD_MEMBER;
+    else if (strcmp(cstring, "CLIENT_GROUP_MEMBER_ADDED") == 0) return CLIENT_GROUP_MEMBER_ADDED;
     else                                                        return INVALID;
 }
