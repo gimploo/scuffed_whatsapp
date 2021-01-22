@@ -4,7 +4,6 @@ OBJS= linkedlist.o common.o thread_pool.o
 BIN= client server
 
 all: $(BIN)
-	rm *.o
 
 client: tcp_client.c common.o
 	$(CC) $(CCFLAGS) -o client tcp_client.c common.o
