@@ -7,6 +7,9 @@ pthread_mutex_t pause_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t pause_cond = PTHREAD_COND_INITIALIZER;
 volatile bool pause_thread = false;
 
+// Client state
+static int state_tracker = 0;
+
 Client *    client_init(short server_port);
 void        client_thread_init(Client *client);
 void *      client_send(void *pclient);
@@ -17,7 +20,7 @@ void        client_sendline(Client *client, char buffer[], int limit);
 void        client_recvline(Client *client, char buffer[], int limit);
 void        client_send_request(Client *client, Msg_Type request);
 void        client_choose_partner(Client *client);
-int         menu(Client *client);
+int         menu(Client *client, int state);
 void        client_choose_group_member(Client *client);
 
 int main(int argc, char *argv[])
@@ -93,10 +96,12 @@ void * client_send(void *pclient)
     while (connected)
     {
         pthread_mutex_lock(&pause_lock);
+        {
             while (pause_thread)
             {
                 pthread_cond_wait(&pause_cond, &pause_lock);
             }
+        }
         pthread_mutex_unlock(&pause_lock);
 
         // Takes user input
@@ -127,12 +132,14 @@ void * client_send(void *pclient)
         }
         else if (strcmp(sendline, "menu()") == 0)
         {
-            menu(client);
+            menu(client, state_tracker);
+            printf("[*] Press Enter to continue ....");
+            while(getchar() != '\n');
         }
         else 
         {
             client_sendline(client, sendline, MAXLINE);
-            while(getchar() != '\n');
+            /*sleep(1);*/
         }
 
     }
@@ -155,13 +162,74 @@ void * client_recv(void *pclient)
                 print_active_users(recvline);
                 break;
 
+            case CLIENT_UNAVAILABLE:
+                fprintf(stderr, "[!] He/she`s busy\n");
+                break;
+
             case CLIENT_CHOOSE_PARTNER:
                 pthread_mutex_lock(&pause_lock);
                     pause_thread = true;
                 pthread_mutex_unlock(&pause_lock);
                 client_choose_partner(client);
                 break;
+
+            case CLIENT_PARTNER_NULL:
+                fprintf(stderr, "\n[!] Invite a friend\n");
+                break;
+
+            case CLIENT_PARTNERS_PARTNER_NULL:
+                fprintf(stderr, "\n[!] Friend request pending\n");
+                break;
+
+            case CLIENT_NOT_FOUND:
+                pthread_mutex_lock(&pause_lock);
+                {
+                    pause_thread = false;
+                    fprintf(stderr, "[!] Friend not found\n");
+                    pthread_cond_signal(&pause_cond);
+                }
+                pthread_mutex_unlock(&pause_lock);
+                break;
+
+            case CLIENT_CHOOSE_ITSELF:
+                pthread_mutex_lock(&pause_lock);
+                {
+                    pause_thread = false;
+                    fprintf(stderr, "[!] You cant do that! ;)\n");
+                    pthread_cond_signal(&pause_cond);
+                }
+                pthread_mutex_unlock(&pause_lock);
+                break;
+
+            case CLIENT_PARTNER_SELECTED:
+                pthread_mutex_lock(&pause_lock);
+                {
+                    pause_thread = false;
+                    pthread_cond_signal(&pause_cond);
+                }
+                pthread_mutex_unlock(&pause_lock);
+                printf("[!] Friend request accepted!\n");
+                break;
                 
+            case CLIENT_CHAT_SETUP:
+                client_send_request(client, CLIENT_CHAT_SETUP);
+                break;
+
+            case CLIENT_CHAT_START:
+                client_send_request(client, CLIENT_CHAT_START);
+                state_tracker = 1;
+                printf("\n[!] PRIVATE CHAT MODE\n");
+                break;
+
+            case CLIENT_GROUP_CHAT_START:
+                state_tracker = 1;
+                printf("\n[!] GROUP CHAT MODE\n");
+                break;
+
+            case CLIENT_GROUP_EMPTY:
+                printf("\n[!] Invite a friend to the group\n");
+                break;
+
             case CLIENT_GROUP_ADD_MEMBER:
                 pthread_mutex_lock(&pause_lock);
                     pause_thread = true;
@@ -169,72 +237,22 @@ void * client_recv(void *pclient)
                 client_choose_group_member(client);
                 break;
 
-            case CLIENT_CHAT_SETUP:
-                client_send_request(client, CLIENT_CHAT_SETUP);
-                break;
-
-            case CLIENT_CHAT_START:
-                client_send_request(client, CLIENT_CHAT_START);
-                printf("\n[!] PRIVATE CHAT MODE\n");
-                break;
-
-            case CLIENT_GROUP_CHAT_START:
-                client_send_request(client, CLIENT_GROUP_CHAT_START);
-                printf("\n[!] GROUP CHAT MODE\n");
-                break;
-
-            case CLIENT_GROUP_EMPTY:
-                printf("[!] Group is empty\n");
-                break;
-
-            case CLIENT_UNAVAILABLE:
-                fprintf(stderr, "[!] Client Unavailable\n");
-                break;
-
-            case CLIENT_PARTNER_NULL:
-                fprintf(stderr, "[!] Parnter not selected\n");
-                break;
-
-            case CLIENT_PARTNER_NOT_SET:
-                fprintf(stderr, "[!] He/she didnt add you as their friend\n");
-                break;
-
-            case CLIENT_NOT_FOUND:
-                pthread_mutex_lock(&pause_lock);
-                    pause_thread = false;
-                    fprintf(stderr, "[!] He/she doesnt exist\n");
-                    pthread_cond_signal(&pause_cond);
-                pthread_mutex_unlock(&pause_lock);
-                break;
-
-            case CLIENT_SAME_USER:
-                pthread_mutex_lock(&pause_lock);
-                    pause_thread = false;
-                    fprintf(stderr, "[!] You cant talk to yourself\n");
-                    pthread_cond_signal(&pause_cond);
-                pthread_mutex_unlock(&pause_lock);
-                break;
-
-            case CLIENT_PARTNER_SELECTED:
-                pthread_mutex_lock(&pause_lock);
-                    pause_thread = false;
-                    pthread_cond_signal(&pause_cond);
-                pthread_mutex_unlock(&pause_lock);
-                printf("[!] He/she is now your friend.\n");
-                break;
-
             case CLIENT_GROUP_MEMBER_ADDED:
                 pthread_mutex_lock(&pause_lock);
+                {
                     pause_thread = false;
                     pthread_cond_signal(&pause_cond);
+                }
                 pthread_mutex_unlock(&pause_lock);
-                printf("[!] He/she is now in your group.\n");
+                printf("[!] Group invite accepted! \n");
                 break;
+
             case FAILED:
                 fprintf(stderr, "[!] Past execution failed\n");
                 break;
+
             default:
-                printf("\n%s", recvline);
+                printf("\n%s\n", recvline);
                 break;
         }
     }
@@ -242,44 +260,73 @@ void * client_recv(void *pclient)
 
 }
 
-int menu(Client *client)
+int menu(Client *client, int state)
 {
-    printf("---- MENU ----\n");
-    printf("a. Add a friend\n");
-    printf("b. Add a friend to your group\n");
-    printf("c. Text a friend\n");
-    printf("d. Broadcast to friends\n");
-    printf("e. Check whose online\n");
-    printf("--------------\n");
-
     char choice[4];
-    do {
-        memset(choice, 0, 4);
-        cstring_input("choice (a-c): ", choice, 3);
-    } while (choice[0] < 'a' || choice[0] > 'z');
 
-    switch (choice[0])
+    if (state == 0)
     {
-        case 'a':
-            client_send_request(client, CLIENT_CHOOSE_PARTNER);
-            break;
-        case 'b':
-            client_send_request(client, CLIENT_GROUP_ADD_MEMBER);
-            break;
-        case 'c':
-            client_send_request(client, CLIENT_CHAT_SETUP);
-            break;
-        case 'd':
-            client_send_request(client, CLIENT_GROUP_CHAT_SETUP);
-            break;
-        case 'e':
-            client_send_request(client, ACTIVE_USERS);
-            break;
-        default:
-            fprintf(stderr, "[!] Invalid choice\n");
-            return 1;
+        printf("---- MENU ----\n");
+        printf("a. Add a friend\n");
+        printf("b. Add a friend to your group\n");
+        printf("c. Text a friend\n");
+        printf("d. Broadcast to friends\n");
+        printf("e. Check whose online\n");
+        printf("--------------\n");
+
+        do {
+            memset(choice, 0, 4);
+            cstring_input("choice (a-c): ", choice, 3);
+        } while (choice[0] < 'a' || choice[0] > 'z');
+
+        switch (choice[0])
+        {
+            case 'a':
+                client_send_request(client, CLIENT_CHOOSE_PARTNER);
+                break;
+            case 'b':
+                client_send_request(client, CLIENT_GROUP_ADD_MEMBER);
+                break;
+            case 'c':
+                client_send_request(client, CLIENT_CHAT_SETUP);
+                break;
+            case 'd':
+                client_send_request(client, CLIENT_GROUP_BROADCAST_SETUP);
+                break;
+            case 'e':
+                client_send_request(client, ACTIVE_USERS);
+                break;
+            default:
+                fprintf(stderr, "[!] Invalid choice\n");
+                return 1;
+        }
     }
-    sleep(1);
+    else if (state == 1)
+    {
+        printf("---- MENU ----\n");
+        printf("a. Quit from chat\n");
+        printf("--------------\n");
+
+        do {
+            memset(choice, 0, 4);
+            cstring_input("choice (a-c): ", choice, 3);
+        } while (choice[0] < 'a' || choice[0] > 'z');
+
+        switch (choice[0])
+        {
+            case 'a':
+                client_send_request(client, CLIENT_CHAT_QUIT);
+                state_tracker = 0;
+                break;
+            default:
+                fprintf(stderr, "[!] Invalid choice\n");
+                return 1;
+        }
+    }
+    else 
+    {
+        printf("[!] Invalid state\n");
+    }
     return 0;
 }
 
