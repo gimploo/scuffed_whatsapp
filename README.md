@@ -1,6 +1,6 @@
 # scuffed whatsapp
 
-A fun little project for me to learn about socket programming and how to implement it in c. The goal is to have it function more or less like whatsapp i.e private one to one connections along with a group chat functionality to be the most important aspects.
+A fun little project for me to learn about socket programming, multithreading using the pthreads api and how to implement all that in c. The goal is to have it function more or less like whatsapp i.e private one to one connections along with a group chat functionality to be the most important aspects.
 
 ## Usage
 1. Build the project 
@@ -23,7 +23,9 @@ A fun little project for me to learn about socket programming and how to impleme
     [x] Unique username setup logic
     [x] Group chat functionality
     [x] Private one to one connection 
-    [ ] Server and client optimizations
+    [ ] Implement a Friends list
+    [x] Implement a Groups list
+    [ ] Implement thread pools on server side
 
 
 
