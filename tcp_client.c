@@ -19,7 +19,7 @@ void        client_send_info(Client *client);
 void        client_sendline(Client *client, char buffer[], int limit);
 void        client_recvline(Client *client, char buffer[], int limit);
 void        client_send_request(Client *client, Msg_Type request);
-void        client_choose_partner(Client *client);
+void        client_choose_friend(Client *client);
 int         menu(Client *client, int state);
 void        client_choose_group_member(Client *client);
 
@@ -170,7 +170,7 @@ void * client_recv(void *pclient)
                 pthread_mutex_lock(&pause_lock);
                     pause_thread = true;
                 pthread_mutex_unlock(&pause_lock);
-                client_choose_partner(client);
+                client_choose_friend(client);
                 break;
 
             case CLIENT_PARTNER_NULL:
@@ -221,7 +221,7 @@ void * client_recv(void *pclient)
                 printf("\n[!] PRIVATE CHAT MODE\n");
                 break;
 
-            case CLIENT_GROUP_CHAT_START:
+            case CLIENT_GROUP_BROADCAST_START:
                 state_tracker = 1;
                 printf("\n[!] GROUP CHAT MODE\n");
                 break;
@@ -339,8 +339,8 @@ Client * client_init(short server_port)
     } while(strcmp(client->name, "\0") == 0);
 
     client->available = true;
-    client->next = NULL;
-    client->partner = NULL;
+    client->next_client = NULL;
+    client->friend = NULL;
 
     if ((client->socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         ERROR_HANDLE();
@@ -398,7 +398,7 @@ void client_send_info(Client *client)
 }
 
 
-void client_choose_partner(Client *client)
+void client_choose_friend(Client *client)
 {
     char sendline[MAXWORD+1];
     cstring_input("[?] Who do u want to talk with: ", sendline, MAXWORD);

@@ -35,6 +35,7 @@
 
 #define PERROR() (fprintf(stderr, "[!] ERROR ("__FILE__" :%d): %s\n", __LINE__, strerror(errno)))
 
+
 typedef enum {
     SUCCESS,
     FAILED,
@@ -61,7 +62,7 @@ typedef enum {
     CLIENT_GROUP_OVERFLOW,
     CLIENT_GROUP_ADD_MEMBER,
     CLIENT_GROUP_BROADCAST_SETUP,
-    CLIENT_GROUP_CHAT_START,
+    CLIENT_GROUP_BROADCAST_START,
     CLIENT_GROUP_MEMBER_ADDED
 } Msg_Type;
 
@@ -72,20 +73,22 @@ typedef struct client {
     int socket;
     char straddr[IPV4_STRLEN+1];
     bool available;
-
-    // Private chat 
-    struct client *partner;
-    volatile bool chat_active;
     pthread_rwlock_t lock;
 
-    // Group chat
+    // Private chat 
+    struct client *friend;
+    struct client *next_friend;
+    volatile bool chat_active;
+
+    // Broadcast chat
     struct client **group_array;
     int top;
 
     // list
-    struct client *next;
+    struct client *next_client;
 
 } Client;
+
 
 // Takes input from the user and stores in buffer[]
 void cstring_input(char *message, char buffer[], int limit);
