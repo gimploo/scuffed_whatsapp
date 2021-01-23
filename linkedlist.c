@@ -1,83 +1,43 @@
 #include "common.h"
 #include "linkedlist.h"
 
-/*void ll_enqueue(Node **ll_head, Node **ll_tail, Node *client_node)*/
-/*{*/
-    /*if (*ll_tail == NULL) */
-        /**ll_head = client_node;*/
-    /*else */
-        /*(*ll_tail)->next = client_node;*/
-
-    /**ll_tail = client_node;*/
-/*}*/
-
-void ll_append(Client **llhead, Client *client_node)
+bool ll_append(List *list, Client *client_node)
 {
-    Client *tmp = *llhead, *prev_node = NULL;
+    if (list == NULL)
+    {
+        fprintf(stderr, "[ERR] ll_append: list argument is null\n");
+        return false;
+    }
 
-    if (*llhead == NULL)
+    if (list->head == NULL || list->tail == NULL)
     {
-        *llhead = client_node;
-        return ;
-    }
-   
-    while (tmp)
+        list->head = client_node;
+        list->tail = client_node;
+        printf("[LOG] ll_append: head and tail is NULL\n");
+        return true;
+    } 
+    else 
     {
-        prev_node = tmp;
-        tmp = tmp->next;
+        printf("[LOG] ll_append: appended to list\n");
+        list->tail->next_client = client_node;
+        list->tail = client_node;
+        return true;
     }
-    prev_node->next = client_node;
 }
 
-/*void * ll_dequeue(Node **llhead, Node **ll_tail)*/
-/*{*/
-    /*if (*llhead == NULL)*/
-        /*return NULL;*/
-    /*void *node = *llhead;*/
-    /**llhead = (*llhead)->next; */
-    /*if (*llhead == NULL)*/
-        /*ll_tail = NULL;*/
-    /*return node;    */
-/*}*/
-
-int ll_insertion(Client **llhead, Client *client_node, unsigned int position)
+int ll_delete_node(List *list, Client *client_node)
 {
-    unsigned int counter = 0;
-    if (*llhead == NULL)
-    {
-        *llhead = client_node;
-        return 0;
-    }
-    Client *tmp = *llhead, *prev_node = NULL;
-    while (tmp != NULL)
-    {
-        if (position == counter++)
-        {
-            prev_node->next = client_node;
-            return 0;
-        }
-        prev_node = tmp; 
-        tmp = tmp->next;
-    }
-    if (position == (counter+1))
-    {
-        prev_node->next = client_node;
-        return 0;
-    }
-    return 1;
-}
+    Client **head = &list->head;
+    Client **tail = &list->tail;
+    Client *tmp = list->head, *prev_node = NULL;
 
-int ll_deletion(Client **llhead, Client *client_node)
-{
-    Client *tmp = *llhead, *prev_node = NULL;
-
-    if (*llhead == NULL)
+    if (*head == NULL)
         return 1;
 
-    if (*llhead == client_node)
+    if (*head == client_node)
     {
-        Client *node = *llhead;
-        *llhead = (*llhead)->next;
+        Client *node = *head;
+        *head = (*head)->next_client;
         free(node);
         return 0;
     }
@@ -86,24 +46,33 @@ int ll_deletion(Client **llhead, Client *client_node)
     {
         if (tmp == client_node)
         {
-           prev_node->next = tmp->next; 
-           free(tmp);
-           return 0;
+            if (tmp == *tail)
+            {
+                *tail = prev_node;
+                prev_node->next_client = NULL;
+                free(tmp);
+                return 0;
+            }
+            prev_node->next_client = tmp->next_client; 
+            free(tmp);
+            return 0;
         }
         prev_node = tmp;
-        tmp = tmp->next;
+        tmp = tmp->next_client;
     }
     return 2;
 }
 
-void ll_free(Client *llhead)
+void ll_free(List *list)
 {
     Client *prev_node = NULL;
-    while (llhead != NULL)
+    while (list->head != NULL)
     {
-        prev_node = llhead;
-        llhead = llhead->next;
+        prev_node = list->head;
+        list->head = list->head->next_client;
         free(prev_node);
     }
-    llhead = NULL;
+    list->head = NULL;
+    list->tail = NULL;
+    list->count = 0;
 }

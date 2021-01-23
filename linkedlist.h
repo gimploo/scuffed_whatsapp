@@ -5,14 +5,14 @@
 
 typedef struct {
     Client *head;
+    Client *tail;
     int count;
     pthread_rwlock_t lock;
 } List;
 
-int ll_insertion(Client **,Client *, uint32_t position);
-int ll_deletion(Client **,Client *);
-void ll_append(Client **,Client *);
-void ll_free(Client *);
+int ll_delete_node(List *,Client *);
+bool ll_append(List *,Client *);
+void ll_free(List *);
 
 // Queue (very scuffed) not used
 /*
