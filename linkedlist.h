@@ -3,13 +3,6 @@
 
 #include "common.h"
 
-typedef struct {
-    Client *head;
-    Client *tail;
-    int count;
-    pthread_rwlock_t lock;
-} List;
-
 int ll_delete_node(List *,Client *);
 bool ll_append(List *,Client *);
 void ll_free(List *);
