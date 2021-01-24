@@ -122,16 +122,15 @@ Client * client_create_node(int socket, char addr[])
 {
     Client *client = malloc(sizeof(Client));
     client->socket = socket;
-    client->friend = NULL;
     client->next_client = NULL;
+    client->friend = NULL;
     client->available = true;
-    client->chat_active = false;
-    client->group_array = malloc(sizeof(Client) * MAX_GROUP_MEMBERS);
+    client->private_chat_active = client->group_chat_active = false;
     client->top = -1;
 
-    strcpy(client->straddr , addr);
     memset(client->name, 0, MAXWORD);
-    memset(client->group_array, 0, MAX_GROUP_MEMBERS);
+    memset(client->group, 0, MAX_MEMBERS-1);
+    strcpy(client->straddr , addr);
 
     // Request for the client info (rn only username from the client)
     client_get_info(client);
@@ -146,14 +145,14 @@ bool client_group_add_member(Client *client, Client *member)
 {
     pthread_rwlock_wrlock(&list.lock);
     {
-        if (client->top == MAX_GROUP_MEMBERS-1)
+        if (client->top == MAX_MEMBERS-1)
         {
             fprintf(stderr, "[ERR] client_group_add_member: OVERFLOW\n");
             pthread_rwlock_unlock(&list.lock);
             return false;
         }
         printf("[LOG] %s added %s to the group\n", client->name, member->name);
-        client->group_array[++client->top] = member;
+        client->group[++client->top] = member;
         server_send_response(client, CLIENT_GROUP_MEMBER_ADDED);
     }
     pthread_rwlock_unlock(&list.lock);
@@ -169,7 +168,7 @@ void client_group_print_members(Client *client)
     printf("---- GROUP MEMBERS ----\n");
     pthread_rwlock_rdlock(&client->lock);
     {
-        node = client->group_array;
+        node = client->group;
         array_top = client->top;
     }
     pthread_rwlock_unlock(&client->lock);
@@ -197,11 +196,11 @@ int client_group_setup(Client *client)
             pthread_rwlock_unlock(&list.lock);
             return -1;
         }
-        client->chat_active = true;
+        client->group_chat_active = true;
     }
     pthread_rwlock_unlock(&list.lock);
     
-    client_group_broadcast_thread_create(client);
+    server_send_response(client, CLIENT_GROUP_BROADCAST_START);
     return 0;
 }
 
@@ -361,10 +360,7 @@ void * server_recv(void *pclient)
                 server_send_response(client, CLIENT_GROUP_ADD_MEMBER);
                 member = client_group_get_member(client);
                 if (member == NULL)
-                {
-                    server_send_response(client, FAILED);
                     break;
-                }
                 client_group_add_member(client, member);
                 break;
 
@@ -521,7 +517,7 @@ int client_friend_chat_setup(Client *client)
         if (other_client->friend == client && other_client->available == true)
         {
             client->available = other_client->available = false;
-            client->chat_active = other_client->chat_active = true;
+            client->private_chat_active = other_client->private_chat_active = true;
         }
 
         // he/she hasnt made anyone his/her friend 
@@ -597,58 +593,55 @@ void *client_group_broadcast_thread_handler(void *pclient)
     char recvline[MAXLINE+1];
     char sendline[MAXSND+1];
     char mssg[MAXLINE+1];
+    int recv_output;
 
     Client *client = (Client *)pclient;
-    Client **node = client->group_array;
+    Client **node = client->group;
     snprintf(mssg, MAXLINE, "%s left\n", client->name);
 
     printf("[LOG] %s initiated group chat\n", client->name);
-    while (client->chat_active)
+    while (client->group_chat_active)
     {
         // Recieves text from the client
-        switch(recv(client->socket, recvline, MAXLINE, 0 ))
-        {
-            case -1:
-                return NULL;
-            case 0:
-                pthread_rwlock_wrlock(&client->lock);
-                {
-                    client->chat_active = false;
-                }
-                pthread_rwlock_unlock(&client->lock);
-
-                server_sendline(client->friend, mssg, MAXLINE);
-                return NULL;
-        }
+        recv_output = recv(client->socket, recvline, MAXLINE, 0 );
+        if (recv_output == -1)
+            continue;
+        else if (recv_output == 0)
+            break;
 
         // Users wants to quit
         if (strcmp(recvline, "CLIENT_CHAT_QUIT") == 0)
-        {
-            pthread_rwlock_wrlock(&client->lock);
-            {
-                client->chat_active = false;
-            }
-            pthread_rwlock_unlock(&client->lock);
-            server_sendline(client->friend, mssg, MAXLINE);
-            return NULL;
-        }
+            break;
 
         // Sends the text to every client members
         snprintf(sendline, MAXSND, "%s: %s", client->name, recvline);
         for (int i = client->top; i > -1; i--)
         {
+            if (node[i]->group_chat_active == false)
+                continue;
             if (send(node[i]->socket, sendline, MAXLINE, 0) < 0)
             {
-                pthread_rwlock_wrlock(&list.lock);
+                pthread_rwlock_wrlock(&client->lock);
                 {
-                    client->chat_active = false;
+                    client->group_chat_active = false;
+                    if (client->friend != NULL)
+                        server_sendline(client->friend, mssg, MAXLINE);
+                    server_send_response(client, CLIENT_GROUP_BROADCAST_CLOSE);
                 }
-                pthread_rwlock_unlock(&list.lock);
+                pthread_rwlock_unlock(&client->lock);
                 fprintf(stderr, "[ERR] client2 send error\n");
                 return NULL;
             }
         }
     }
+    pthread_rwlock_wrlock(&client->lock);
+    {
+        client->group_chat_active = false;
+        if (client->friend != NULL)
+            server_sendline(client->friend, mssg, MAXLINE);
+        server_send_response(client, CLIENT_GROUP_BROADCAST_CLOSE);
+    }
+    pthread_rwlock_unlock(&client->lock);
     return NULL;
 }
 
@@ -657,54 +650,49 @@ void *client_friend_chat_thread_handler(void *pclient)
     char recvline[MAXLINE+1];
     char sendline[MAXSND+1];
     char mssg[MAXLINE+1];
+    int recv_output;
 
     Client *client = (Client *)pclient;
     snprintf(mssg, MAXLINE, "%s left\n", client->name);
 
     printf("[LOG] %s <-> %s chat initiated\n", client->name, client->friend->name);
-    while (client->chat_active)
+    while (client->private_chat_active)
     {
-        switch(recv(client->socket, recvline, MAXLINE, 0 ))
-        {
-            case -1:
-                continue;
-            case 0:
-                pthread_rwlock_wrlock(&client->lock);
-                {
-                    client->chat_active = false;
-                }
-                pthread_rwlock_unlock(&client->lock);
-
-                server_sendline(client->friend, mssg, MAXLINE);
-                return NULL;
-        }
-
-        if (strcmp(recvline, "CLIENT_CHAT_QUIT") == 0)
-        {
-            pthread_rwlock_wrlock(&client->lock);
-            {
-                client->chat_active = false;
-            }
-            pthread_rwlock_unlock(&client->lock);
-            server_sendline(client->friend, mssg, MAXLINE);
-            return NULL;
-        }
-
-
-        snprintf(sendline, MAXSND, "%s: %s", client->name, recvline);
-        if (client->friend == NULL)
+        // get the buffer from the client
+        recv_output = recv(client->socket, recvline, MAXLINE, 0 );
+        if(recv_output == -1)
+            continue;
+        else if (recv_output == 0)
             break;
-        else if (send(client->friend->socket, sendline, MAXLINE, 0) < 0)
+
+        // if the client quits
+        if (strcmp(recvline, "CLIENT_CHAT_QUIT") == 0)
+            break;
+
+        // Checking if the other client exits from the chat or the server
+        if (client->friend->private_chat_active == false || client->friend == NULL)
         {
-            pthread_rwlock_wrlock(&list.lock);
-            {
-                client->chat_active = false;
-            }
-            pthread_rwlock_unlock(&list.lock);
-            fprintf(stderr, "[ERR] client2 send error\n");
+            server_send_response(client, CLIENT_CHAT_CLOSED);
             return NULL;
+        }
+        else 
+            snprintf(sendline, MAXSND, "%s: %s", client->name, recvline);
+
+        // send the buffer to the other client
+        if (send(client->friend->socket, sendline, MAXLINE, 0) < 0)
+        {
+            fprintf(stderr, "[ERR] client2 send error\n");
+            break;
         }
     }
+    pthread_rwlock_wrlock(&client->lock);
+    {
+        client->private_chat_active = false;
+        client->friend->private_chat_active = false;
+        server_sendline(client->friend, mssg, MAXLINE);
+        server_send_response(client, CLIENT_CHAT_CLOSED);
+    }
+    pthread_rwlock_unlock(&client->lock);
     return NULL;
 }
 
@@ -731,13 +719,11 @@ void server_remove_client(Client *client)
             client->friend->available = true;
             if (client->friend->friend == client)
             {
-                client->friend->chat_active = false;
+                client->friend->private_chat_active = false;
                 client->friend->friend = NULL;
             }
         }
         
-        free(client->group_array);
-
         switch (ll_delete_node(&list, client))
         {
             case 0:
