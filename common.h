@@ -23,7 +23,7 @@
 #define MAXSND 6144
 #define MAXLINE 4096
 #define MAXWORD 1024
-#define MAX_GROUP_MEMBERS 3
+#define MAX_MEMBERS 3
 #define LOCALHOST "127.0.0.1"
 #define IPV4_STRLEN 16
 #define SERVER_BACKLOG 10
@@ -51,6 +51,7 @@ typedef enum {
     CLIENT_CHAT_SETUP,
     CLIENT_CHAT_START,
     CLIENT_CHAT_QUIT,
+    CLIENT_CHAT_CLOSED,
 
     CLIENT_CHOOSE_PARTNER,
     CLIENT_CHOOSE_ITSELF,
@@ -63,8 +64,10 @@ typedef enum {
     CLIENT_GROUP_ADD_MEMBER,
     CLIENT_GROUP_BROADCAST_SETUP,
     CLIENT_GROUP_BROADCAST_START,
+    CLIENT_GROUP_BROADCAST_CLOSE,
     CLIENT_GROUP_MEMBER_ADDED
 } Msg_Type;
+
 
 typedef struct client {
 
@@ -77,17 +80,25 @@ typedef struct client {
 
     // Private chat 
     struct client *friend;
-    struct client *next_friend;
-    volatile bool chat_active;
+    volatile bool private_chat_active;
 
-    // Broadcast chat
-    struct client **group_array;
+    // Group chat
+    struct client *group[MAX_MEMBERS];
     int top;
+    volatile bool group_chat_active;
 
     // list
     struct client *next_client;
 
 } Client;
+
+// List keeps track of linkedlist 
+typedef struct {
+    Client *head;
+    Client *tail;
+    int count;
+    pthread_rwlock_t lock;
+} List;
 
 
 // Takes input from the user and stores in buffer[]
