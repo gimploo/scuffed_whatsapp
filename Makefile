@@ -21,4 +21,4 @@ thread_pool.o: thread_pool.c
 	$(CC) $(CCFLAGS) -c thread_pool.c
 
 clean: 
-	rm $(BIN)
+	rm $(BIN) $(OBJS)
