@@ -132,9 +132,11 @@ void * client_send(void *pclient)
         }
         else if (strcmp(sendline, "menu()") == 0)
         {
-            menu(client, state_tracker);
-            printf("[*] Press Enter to continue ....");
-            while(getchar() != '\n');
+            if (menu(client, state_tracker) == 0)
+            {
+                printf("[*] Press Enter to continue ....");
+                while(getchar() != '\n');
+            }
         }
         else 
         {
@@ -185,7 +187,7 @@ void * client_recv(void *pclient)
                 pthread_mutex_lock(&pause_lock);
                 {
                     pause_thread = false;
-                    fprintf(stderr, "[!] Friend not found\n");
+                    fprintf(stderr, "[!] Person not found\n");
                     pthread_cond_signal(&pause_cond);
                 }
                 pthread_mutex_unlock(&pause_lock);
@@ -208,7 +210,7 @@ void * client_recv(void *pclient)
                     pthread_cond_signal(&pause_cond);
                 }
                 pthread_mutex_unlock(&pause_lock);
-                printf("[!] Friend request accepted!\n");
+                printf("[!] Friend request sent!\n");
                 break;
                 
             case CLIENT_CHAT_SETUP:
@@ -221,7 +223,13 @@ void * client_recv(void *pclient)
                 printf("\n[!] PRIVATE CHAT MODE\n");
                 break;
 
+            case CLIENT_CHAT_CLOSED:
+            case CLIENT_GROUP_BROADCAST_CLOSE:
+                state_tracker = 0;
+                break;
+
             case CLIENT_GROUP_BROADCAST_START:
+                client_send_request(client, CLIENT_GROUP_BROADCAST_START);
                 state_tracker = 1;
                 printf("\n[!] GROUP CHAT MODE\n");
                 break;
@@ -232,7 +240,9 @@ void * client_recv(void *pclient)
 
             case CLIENT_GROUP_ADD_MEMBER:
                 pthread_mutex_lock(&pause_lock);
+                {
                     pause_thread = true;
+                }
                 pthread_mutex_unlock(&pause_lock);
                 client_choose_group_member(client);
                 break;
@@ -244,7 +254,7 @@ void * client_recv(void *pclient)
                     pthread_cond_signal(&pause_cond);
                 }
                 pthread_mutex_unlock(&pause_lock);
-                printf("[!] Group invite accepted! \n");
+                printf("[!] Group invite sent! \n");
                 break;
 
             case FAILED:
@@ -338,9 +348,6 @@ Client * client_init(short server_port)
         cstring_input("[?] Name: ", client->name, MAXWORD);
     } while(strcmp(client->name, "\0") == 0);
 
-    client->available = true;
-    client->next_client = NULL;
-    client->friend = NULL;
 
     if ((client->socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         ERROR_HANDLE();
