@@ -35,7 +35,6 @@
 
 #define PERROR() (fprintf(stderr, "[!] ERROR ("__FILE__" :%d): %s\n", __LINE__, strerror(errno)))
 
-
 typedef enum {
     SUCCESS,
     FAILED,
@@ -68,44 +67,42 @@ typedef enum {
     CLIENT_GROUP_MEMBER_ADDED
 } Msg_Type;
 
+struct list_node {
+    struct client_node *client;
+    struct list_node *next;
+};
 
-typedef struct client {
+struct list_header {
+    struct list_node *head;
+    struct list_node *tail;
+    unsigned count;
+    pthread_rwlock_t lock;
+};
 
-    // info
-    char name[MAXWORD+1];
+struct client_node {
     int socket;
+    char name[MAXWORD+1];
     char straddr[IPV4_STRLEN+1];
     bool available;
-    pthread_rwlock_t lock;
 
-    // Private chat 
-    struct client *friend;
-    volatile bool private_chat_active;
+    // Client lists
+    struct list_header friends_list;
+    struct list_header group_members;
 
-    // Group chat
-    struct client *group[MAX_MEMBERS];
-    int top;
-    volatile bool group_chat_active;
+    struct client_node *_friend;
+    struct list_node *db_node_ref;
+};
 
-    // list
-    struct client *next_client;
-
-} Client;
-
-// List keeps track of linkedlist 
-typedef struct {
-    Client *head;
-    Client *tail;
-    int count;
-    pthread_rwlock_t lock;
-} List;
+typedef struct client_node Client;
+typedef struct list_header List;
+typedef struct list_node List_Node;
 
 
 // Takes input from the user and stores in buffer[]
 void cstring_input(char *message, char buffer[], int limit);
 
-char * msg_to_cstr(Msg_Type msg);
+char * msg_as_cstr(Msg_Type msg);
 
-Msg_Type cstr_to_msg(char *cstring);
+Msg_Type cstr_as_msg(char *cstring);
 
 #endif

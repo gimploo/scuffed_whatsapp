@@ -8,7 +8,7 @@ void cstring_input(char *message, char buffer[], int limit)
     buffer[strlen(buffer)-1] = '\0';
 }
 
-char * msg_to_cstr(Msg_Type msg)
+char * msg_as_cstr(Msg_Type msg)
 {
     switch (msg) {
         case SUCCESS:                       return "SUCCESS";
@@ -39,7 +39,7 @@ char * msg_to_cstr(Msg_Type msg)
     }
 }
 
-Msg_Type cstr_to_msg(char *cstring)
+Msg_Type cstr_as_msg(char *cstring)
 {
     if      (strcmp(cstring, "SUCCESS") == 0)                       return SUCCESS;
     else if (strcmp(cstring, "FAILED") == 0)                        return FAILED;
