@@ -3,9 +3,10 @@
 
 #include "common.h"
 
-int ll_delete_node(List *,Client *);
-bool ll_append(List *,Client *);
-void ll_free(List *);
+int ll_delete_node(struct list_header *,struct list_node *);
+bool ll_append(struct list_header *,struct list_node *);
+void ll_free(struct list_header *);
+bool ll_is_node_in_list(struct list_header *list, struct list_node *node);
 
 // Queue (very scuffed) not used
 /*

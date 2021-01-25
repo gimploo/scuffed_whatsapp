@@ -1,7 +1,7 @@
 #include "common.h"
 #include "linkedlist.h"
 
-bool ll_append(List *list, Client *client_node)
+bool ll_append(struct list_header *list, struct list_node *node)
 {
     if (list == NULL)
     {
@@ -11,68 +11,86 @@ bool ll_append(List *list, Client *client_node)
 
     if (list->head == NULL || list->tail == NULL)
     {
-        list->head = client_node;
-        list->tail = client_node;
+        list->head = node;
+        list->tail = node;
         printf("[LOG] ll_append: head and tail is NULL\n");
         return true;
     } 
     else 
     {
         printf("[LOG] ll_append: appended to list\n");
-        list->tail->next_client = client_node;
-        list->tail = client_node;
+        list->tail->next = node;
+        list->tail = node;
         return true;
     }
 }
 
-int ll_delete_node(List *list, Client *client_node)
+int ll_delete_node(struct list_header *list, struct list_node *node)
 {
-    Client **head = &list->head;
-    Client **tail = &list->tail;
-    Client *tmp = list->head, *prev_node = NULL;
+    struct list_node **head = &list->head;
+    struct list_node **tail = &list->tail;
+    struct list_node *tmp = list->head, *prev_node = NULL;
 
     if (*head == NULL)
         return 1;
 
-    if (*head == client_node)
+    if (*head == node)
     {
-        Client *node = *head;
-        *head = (*head)->next_client;
+        struct list_node *node = *head;
+        *head = (*head)->next;
         free(node);
         return 0;
     }
 
     while (tmp)
     {
-        if (tmp == client_node)
+        if (tmp == node)
         {
             if (tmp == *tail)
             {
                 *tail = prev_node;
-                prev_node->next_client = NULL;
+                prev_node->next = NULL;
                 free(tmp);
                 return 0;
             }
-            prev_node->next_client = tmp->next_client; 
+            prev_node->next = tmp->next; 
             free(tmp);
             return 0;
         }
         prev_node = tmp;
-        tmp = tmp->next_client;
+        tmp = tmp->next;
     }
     return 2;
 }
 
-void ll_free(List *list)
+void ll_free(struct list_header *list)
 {
-    Client *prev_node = NULL;
+    struct list_node *prev_node = NULL;
     while (list->head != NULL)
     {
         prev_node = list->head;
-        list->head = list->head->next_client;
+        list->head = list->head->next;
         free(prev_node);
     }
     list->head = NULL;
     list->tail = NULL;
     list->count = 0;
+}
+
+bool ll_is_node_in_list(struct list_header *list, struct list_node *node)
+{
+    struct list_node *track = list->head;
+    if (list->head == node)
+        return true;
+    else if (list->tail == node)
+        return true;
+        
+    track = track->next;
+    while (track)
+    {
+        if (track == node)
+            return true;
+        track = track->next;
+    }
+    return false;
 }
