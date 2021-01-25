@@ -157,7 +157,7 @@ void * client_recv(void *pclient)
     {
         client_recvline(client, recvline, MAXLINE);
 
-        switch(cstr_to_msg(recvline))
+        switch(cstr_as_msg(recvline))
         {
             case ACTIVE_USERS:
                 client_recvline(client, recvline, MAXLINE);
@@ -299,9 +299,11 @@ int menu(Client *client, int state)
                 break;
             case 'c':
                 client_send_request(client, CLIENT_CHAT_SETUP);
+                return 1;
                 break;
             case 'd':
                 client_send_request(client, CLIENT_GROUP_BROADCAST_SETUP);
+                return 1;
                 break;
             case 'e':
                 client_send_request(client, ACTIVE_USERS);
@@ -383,7 +385,7 @@ void client_send_info(Client *client)
     strcpy(name_taken, client->name);
 
     // While username is taken
-    while (strcmp(recvline, msg_to_cstr(CLIENT_USERNAME_TAKEN)) == 0)
+    while (strcmp(recvline, msg_as_cstr(CLIENT_USERNAME_TAKEN)) == 0)
     {
         printf("[!] That name is taken\n");
         username_is_changed = true;
@@ -395,7 +397,7 @@ void client_send_info(Client *client)
 
         client_recvline(client, recvline, MAXLINE);
 
-        if (strcmp(recvline,msg_to_cstr(CLIENT_USERNAME_TAKEN)) == 0)
+        if (strcmp(recvline,msg_as_cstr(CLIENT_USERNAME_TAKEN)) == 0)
         {
             strcpy(name_taken, new_name);
         }
@@ -447,7 +449,7 @@ void client_recvline(Client *client, char buffer[], int limit)
 
 void client_send_request(Client *client, Msg_Type request)
 {
-    client_sendline(client, msg_to_cstr(request), MAXMSG);
+    client_sendline(client, msg_as_cstr(request), MAXMSG);
 }
 
 void client_choose_group_member(Client *client)

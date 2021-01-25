@@ -2,7 +2,7 @@
 #include "linkedlist.h"
 #include "thread_pool.h"
 
-List list = {
+List db = {
     .head = NULL,
     .tail = NULL,
     .count = 0,
@@ -15,17 +15,16 @@ pthread_t thread_pool[SERVER_BACKLOG];
 // Server 
 int         server_init(short port, int backlog);
 int         server_sendline(Client *, char buffer[], int limit);
-int         server_recvline(Client *, char buffer[], int limit);
+int         server_recvline(Client *client, char buffer[], int limit);
 Client *    server_accept_connection(int server_socket);
-void        server_remove_client(Client *);
-void        server_add_client(Client *);
 void        server_send_response(Client *, Msg_Type request);
 void *      server_recv(void *client);
+void        server_add_client(Client *client);
+void        server_remove_client(Client *client);
 
 // Client
 Client *    client_create_node(int socket, char *addr);
 void        client_get_info(Client *);
-Client *    client_get_by_name_from_list(char *name);
 Client *    client_set_friend(Client *client);
 
 // Private chat
@@ -42,9 +41,12 @@ Client *    client_group_get_member(Client *client);
 void        client_group_print_members(Client *client);
 
 // miscellaneous
-void        print_active_users(List *);
-void        send_active_users(Client *);
-int         does_user_exist(char *);
+void        list_print(List *);
+void        list_send_client_names(Client *);
+bool        list_does_client_name_exist(char *name, List *list);
+Client *    list_get_client_by_name(char *name, List *list);
+bool        list_is_client_in_list(Client *client, List *list);
+
 
 int main(void)
 {
@@ -60,7 +62,7 @@ int main(void)
     for(;;)
     {
         // prints all acitve users in a menu
-        print_active_users(&list);
+        list_print(&db);
 
         // Accepts incomming connection
         Client *client = server_accept_connection(server_socket);
@@ -74,7 +76,7 @@ int main(void)
 
     }
     // Freeing the client list
-    ll_free(&list);
+    ll_free(&db);
 
 }
 
@@ -86,7 +88,7 @@ void client_get_info(Client *client)
     server_recvline(client, recvline, MAXWORD);
 
     // Checks if the name already exist
-    while (does_user_exist(recvline) == 0)
+    while (list_does_client_name_exist(recvline, &db))
     {
         server_send_response(client, CLIENT_USERNAME_TAKEN);
         server_recvline(client, recvline, MAXWORD);
@@ -98,52 +100,62 @@ void client_get_info(Client *client)
     strcpy(client->name, recvline);
 }
 
-int does_user_exist(char *name)
+bool list_does_client_name_exist(char *name, struct list_header *list)
 {
-    pthread_rwlock_rdlock(&list.lock);
+    pthread_rwlock_rdlock(&list->lock);
     {
-        Client *tmp = list.head;
+        List_Node *tmp = list->head;
         while (tmp)
         {
-            if (strcmp(tmp->name, name) == 0)
+            if (strcmp(tmp->client->name, name) == 0)
             {
-                pthread_rwlock_unlock(&list.lock);
-                return 0;
+                pthread_rwlock_unlock(&list->lock);
+                return true;
             }
-            tmp = tmp->next_client;
+            tmp = tmp->next;
         }
     }
-    pthread_rwlock_unlock(&list.lock);
-    return 1;
+    pthread_rwlock_unlock(&list->lock);
+    return false;
 }
 
 
 Client * client_create_node(int socket, char addr[])
 {
     Client *client = malloc(sizeof(Client));
-    client->socket = socket;
-    client->next_client = NULL;
-    client->friend = NULL;
     client->available = true;
-    client->private_chat_active = client->group_chat_active = false;
-    client->top = -1;
+    client->_friend = NULL;
+    client->friends_list = (List) {
+        .head = NULL,
+        .tail = NULL,
+        .count = 0,
+        .lock = PTHREAD_RWLOCK_INITIALIZER
+    };
+    client->group_members = (List) {
+        .head = NULL,
+        .tail = NULL,
+        .count = 0,
+        .lock = PTHREAD_RWLOCK_INITIALIZER
+    };
 
-    memset(client->name, 0, MAXWORD);
-    memset(client->group, 0, MAX_MEMBERS-1);
+    // info
+    client->socket = socket;
+    snprintf(client->name, MAXWORD, "User%0i", db.count);
     strcpy(client->straddr , addr);
-
-    // Request for the client info (rn only username from the client)
-    client_get_info(client);
 
     // Appends new client to the linked list DS 
     server_add_client(client);
 
+    // Request for the client info (rn only username from the client)
+    client_get_info(client);
+
     return client;
 }
 
+/*
 bool client_group_add_member(Client *client, Client *member)
 {
-    pthread_rwlock_wrlock(&list.lock);
+    pthread_rwlock_wrlock(&db.lock);
     {
         if (client->top == MAX_MEMBERS-1)
         {
@@ -155,32 +167,31 @@ bool client_group_add_member(Client *client, Client *member)
         client->group[++client->top] = member;
         server_send_response(client, CLIENT_GROUP_MEMBER_ADDED);
     }
-    pthread_rwlock_unlock(&list.lock);
+    pthread_rwlock_unlock(&db.lock);
     client_group_print_members(client);
     return true;
 }
 
 void client_group_print_members(Client *client)
 {
-    Client **node = NULL;
-    int array_top = -1;
+    List_Node *node = NULL;
 
     printf("---- GROUP MEMBERS ----\n");
-    pthread_rwlock_rdlock(&client->lock);
+    pthread_rwlock_rdlock(&db.lock);
     {
-        node = client->group;
-        array_top = client->top;
+        node = client->group_members.head;
     }
-    pthread_rwlock_unlock(&client->lock);
+    pthread_rwlock_unlock(&db.lock);
 
     if (node == NULL)
     {
         fprintf(stderr, "client_group_print_members: node is null\n");
         return ;
     }
-    for (int i = array_top; i > -1; i--)
+    while (node)
     {
-        printf("| %s |", node[i]->name);
+        printf("| %s |", node->client->name);
+        node = node->next;
     }
     printf("\n");
     printf("-----------------------\n");
@@ -188,21 +199,22 @@ void client_group_print_members(Client *client)
 
 int client_group_setup(Client *client)
 {
-    pthread_rwlock_rdlock(&list.lock);
+    pthread_rwlock_rdlock(&db.lock);
     {
-        if (client->top == -1)
+        if (client->group_members.head == NULL) 
         {
             server_send_response(client, CLIENT_GROUP_EMPTY);
-            pthread_rwlock_unlock(&list.lock);
+            pthread_rwlock_unlock(&db.lock);
             return -1;
         }
-        client->group_chat_active = true;
+        client->available = false;
     }
-    pthread_rwlock_unlock(&list.lock);
+    pthread_rwlock_unlock(&db.lock);
     
     server_send_response(client, CLIENT_GROUP_BROADCAST_START);
     return 0;
 }
+*/
 
 Client * server_accept_connection(int server_socket)
 {
@@ -245,20 +257,20 @@ int server_init(short port, int backlog)
     return server_socket;
 }
 
-void print_active_users(List *list)
+void list_print(List *list)
 {
     printf("[LOG] Active user list: ");
-    Client *tmp = list->head;
-    if (tmp == NULL)
+    List_Node *node = list->head;
+    if (node == NULL)
         printf("none\n");
     else
     {
         pthread_rwlock_rdlock(&list->lock);
         {
-            while (tmp)
+            while (node)
             {
-                printf(" %s ->", tmp->name);
-                tmp = tmp->next_client;
+                printf(" %s ->", node->client->name);
+                node = node->next;
             }
         }
         pthread_rwlock_unlock(&list->lock);
@@ -267,25 +279,27 @@ void print_active_users(List *list)
 
 }
 
-void send_active_users(Client *client)
+void list_send_client_names(Client *client)
 {
     char buffer[MAXLINE+1];
-    Client *link1 = list.head;
+    List_Node *node = db.head;
     int j, k, i = 0;
     
-    pthread_rwlock_rdlock(&list.lock);
-        while (link1)
+    pthread_rwlock_rdlock(&db.lock);
+    {
+        while (node)
         {
             k = j = 0;
-            while (link1->name[k] != '\0')
+            while (node->client->name[k] != '\0')
             {
-                buffer[i++] = link1->name[k++];
+                buffer[i++] = node->client->name[k++];
             }
             buffer[i++] = '\n';
-            link1 = link1->next_client;
+            node = node->next;
         }
         buffer[i-1]= '\0';
-    pthread_rwlock_unlock(&list.lock);
+    }
+    pthread_rwlock_unlock(&db.lock);
 
     server_sendline(client, buffer, MAXLINE);
 }
@@ -309,7 +323,7 @@ void * server_recv(void *pclient)
                 break;
         }
 
-        Msg_Type request = cstr_to_msg(recvline);
+        Msg_Type request = cstr_as_msg(recvline);
 
         // Handles the request accordingly
         printf("[LOG] (%s) messaged server: %s\n", client->name, recvline);
@@ -317,7 +331,7 @@ void * server_recv(void *pclient)
         {
             case ACTIVE_USERS:
                 server_send_response(client, ACTIVE_USERS);
-                send_active_users(client);
+                list_send_client_names(client);
                 break;
 
             case CLIENT_USERNAME_TAKEN:
@@ -355,7 +369,7 @@ void * server_recv(void *pclient)
              case CLIENT_CHAT_START:
                 client_friend_chat_thread_create(client);
                 break;
-
+/*
              case CLIENT_GROUP_ADD_MEMBER:
                 server_send_response(client, CLIENT_GROUP_ADD_MEMBER);
                 member = client_group_get_member(client);
@@ -371,6 +385,7 @@ void * server_recv(void *pclient)
              case CLIENT_GROUP_BROADCAST_START:
                 client_group_broadcast_thread_create(client);
                 break;
+*/
 
              default:
                 fprintf(stderr, "[ERR] server_request: request is invalid\n");
@@ -385,7 +400,7 @@ Client *client_group_get_member(Client *client)
     char recvline[MAXWORD+1];
     server_recvline(client, recvline, MAXWORD);
 
-    Client *member = client_get_by_name_from_list(recvline);
+    Client *member = list_get_client_by_name(recvline, &client->group_members);
     if (member == NULL)
     {
         fprintf(stderr, "[ERR] client_group_add_member: member not found\n");
@@ -449,27 +464,27 @@ int server_recvline(Client *client, char buffer[], int limit)
 
 void server_send_response(Client *client, Msg_Type request)
 {
-    char *str_msg = msg_to_cstr(request);
+    char *str_msg = msg_as_cstr(request);
     server_sendline(client, str_msg, MAXMSG);
     printf("[LOG] server messaged %s : %s\n", client->name[0] == 0 ? "UNKOWN":client->name, str_msg);
 }
 
-Client * client_get_by_name_from_list(char *name)
+Client * list_get_client_by_name(char *name, List *list)
 {
-    Client *node = list.head;
-    pthread_rwlock_rdlock(&list.lock);
+    List_Node *node = list->head;
+    pthread_rwlock_rdlock(&db.lock);
     {
         while (node)
         {
-            if (strcmp(node->name, name) == 0)
+            if (strcmp(node->client->name, name) == 0)
             {
-                pthread_rwlock_unlock(&list.lock);
-                return node;
+                pthread_rwlock_unlock(&db.lock);
+                return node->client;
             }
-            node = node->next_client;
+            node = node->next;
         }
     }
-    pthread_rwlock_unlock(&list.lock);
+    pthread_rwlock_unlock(&db.lock);
     return NULL;
 }
 
@@ -478,7 +493,7 @@ Client * client_set_friend(Client *client)
     char recvline[MAXLINE+1];
 
     server_recvline(client, recvline, MAXWORD);
-    Client *other_client = client_get_by_name_from_list(recvline);
+    Client *other_client = list_get_client_by_name(recvline, &db);
     if (other_client == NULL)
     {
        fprintf(stderr, "[ERR] client_set_friend: client choose invalid client\n");
@@ -491,10 +506,14 @@ Client * client_set_friend(Client *client)
        server_send_response(client, CLIENT_CHOOSE_ITSELF);
        return NULL;
     } 
+    
+    List_Node *friend_node = malloc(sizeof(List_Node));
+    friend_node->client = other_client;
+    friend_node->next = NULL;
 
-    pthread_rwlock_wrlock(&list.lock);
-        client->friend = other_client;
-    pthread_rwlock_unlock(&list.lock);
+    pthread_rwlock_wrlock(&db.lock);
+        ll_append(&client->friends_list, friend_node);
+    pthread_rwlock_unlock(&db.lock);
 
     server_send_response(client, CLIENT_PARTNER_SELECTED);
 
@@ -503,36 +522,45 @@ Client * client_set_friend(Client *client)
 
 int client_friend_chat_setup(Client *client)
 {
+    char recvline[MAXLINE+1];
+    Client *friend = NULL;
+
     // YOU havent choose a friend 
-    if (client->friend == NULL)
+    if (client->friends_list.head == NULL)
     {
         fprintf(stderr, "[ERR] client_friend_chat_setup: client friend is null\n");
         return -1;
     }
-    Client *other_client = client->friend;
 
-    pthread_rwlock_wrlock(&list.lock);
+    // TODO: Since we have a friends list, we need to ask the user 
+    // to whom he/she wants to talk to
+    server_recvline(client, recvline, MAXWORD);
+    friend = list_get_client_by_name(recvline, &client->friends_list);
+    if (friend == NULL)
     {
-        // he/she is available and wants to talk to you
-        if (other_client->friend == client && other_client->available == true)
-        {
-            client->available = other_client->available = false;
-            client->private_chat_active = other_client->private_chat_active = true;
-        }
+        fprintf(stderr, "[ERR] client_friend_chat_setup: friend not found\n");
+        return -5;
+    }
+    // TODO: write a function to check if a client_node is in a friends_list
 
-        // he/she hasnt made anyone his/her friend 
-        else if (other_client->friend == NULL)
+    pthread_rwlock_wrlock(&db.lock);
+    {
+        // Checking whether the client in the friends list
+        if (list_is_client_in_list(client, &friend->friends_list) == false)
         {
-            fprintf(stderr, "[LOG] client_friend_chat_setup: other clients friend is null\n");
-            pthread_rwlock_unlock(&list.lock);
+            fprintf(stderr, "[LOG] client_friend_chat_setup: client not found in friends list\n");
+            pthread_rwlock_unlock(&db.lock);
             return -2;
         }
-
-        // he/she hasnt made you his/her friend
-        else if (other_client->friend != client)
+        else if (friend->available == true)
         {
-            fprintf(stderr, "[LOG] client_friend_chat_setup: other clients friend is not client\n");
-            pthread_rwlock_unlock(&list.lock);
+            // he/she is available and wants to talk to you
+            client->available = friend->available = false;
+        }
+        else if (friend->available == false)
+        {
+            fprintf(stderr, "[LOG] client_friend_chat_setup: client is busy\n");
+            pthread_rwlock_unlock(&db.lock);
             return -3;
         }
         else 
@@ -541,10 +569,10 @@ int client_friend_chat_setup(Client *client)
             return -4;
         }
     }
-    pthread_rwlock_unlock(&list.lock);
+    pthread_rwlock_unlock(&db.lock);
 
     server_send_response(client, CLIENT_CHAT_START);
-    server_send_response(other_client, CLIENT_CHAT_START);
+    server_send_response(friend, CLIENT_CHAT_START);
     return 0;
 }
 
@@ -566,7 +594,7 @@ int client_friend_chat_thread_create(Client *client)
 
     return 0;
 }
-
+/*
 int client_group_broadcast_thread_create(Client *client)
 {
     pthread_t tid1;
@@ -587,7 +615,6 @@ int client_group_broadcast_thread_create(Client *client)
 
     return 0;
 }
-
 void *client_group_broadcast_thread_handler(void *pclient)
 {
     char recvline[MAXLINE+1];
@@ -644,6 +671,7 @@ void *client_group_broadcast_thread_handler(void *pclient)
     pthread_rwlock_unlock(&client->lock);
     return NULL;
 }
+*/
 
 void *client_friend_chat_thread_handler(void *pclient)
 {
@@ -655,8 +683,8 @@ void *client_friend_chat_thread_handler(void *pclient)
     Client *client = (Client *)pclient;
     snprintf(mssg, MAXLINE, "%s left\n", client->name);
 
-    printf("[LOG] %s <-> %s chat initiated\n", client->name, client->friend->name);
-    while (client->private_chat_active)
+    printf("[LOG] %s <-> %s chat initiated\n", client->name, client->_friend->name);
+    while (client->available == false)
     {
         // get the buffer from the client
         recv_output = recv(client->socket, recvline, MAXLINE, 0 );
@@ -670,7 +698,7 @@ void *client_friend_chat_thread_handler(void *pclient)
             break;
 
         // Checking if the other client exits from the chat or the server
-        if (client->friend->private_chat_active == false || client->friend == NULL)
+        if (client->_friend == NULL || client->_friend->available == true )
         {
             server_send_response(client, CLIENT_CHAT_CLOSED);
             return NULL;
@@ -679,31 +707,40 @@ void *client_friend_chat_thread_handler(void *pclient)
             snprintf(sendline, MAXSND, "%s: %s", client->name, recvline);
 
         // send the buffer to the other client
-        if (send(client->friend->socket, sendline, MAXLINE, 0) < 0)
+        if (send(client->_friend->socket, sendline, MAXLINE, 0) < 0)
         {
             fprintf(stderr, "[ERR] client2 send error\n");
             break;
         }
     }
-    pthread_rwlock_wrlock(&client->lock);
+    pthread_rwlock_wrlock(&client->friends_list.lock);
     {
-        client->private_chat_active = false;
-        client->friend->private_chat_active = false;
-        server_sendline(client->friend, mssg, MAXLINE);
+        client->available = true;
+        client->_friend->available = true;
+        server_sendline(client->_friend, mssg, MAXLINE);
         server_send_response(client, CLIENT_CHAT_CLOSED);
     }
-    pthread_rwlock_unlock(&client->lock);
+    pthread_rwlock_unlock(&client->friends_list.lock);
     return NULL;
 }
 
 void server_add_client(Client *client)
 {
-    pthread_rwlock_wrlock(&list.lock);
+    List_Node *node = malloc(sizeof(List_Node));
+    if (node == NULL)
     {
-        ll_append(&list, client);
-        list.count++;
+        fprintf(stderr, "server_add_client: failed to allocate memory for node \n");
+        return ;
     }
-    pthread_rwlock_unlock(&list.lock);
+    node->client = client;
+    node->next = NULL;
+    client->db_node_ref = node;
+    pthread_rwlock_wrlock(&db.lock);
+    {
+        ll_append(&db, node);
+        db.count++;
+    }
+    pthread_rwlock_unlock(&db.lock);
 }
 
 void server_remove_client(Client *client)
@@ -711,20 +748,20 @@ void server_remove_client(Client *client)
     fprintf(stderr, "[LOG] Client (%s) disconnected\n", client->name);
     close(client->socket);
 
-    pthread_rwlock_wrlock(&list.lock);
+    pthread_rwlock_wrlock(&db.lock);
     {
-        list.count--;
-        if (client->friend != NULL) 
+        db.count--;
+        if (client->friends_list.head != NULL) 
         {
-            client->friend->available = true;
-            if (client->friend->friend == client)
+            client->_friend->available = true;
+            if (client->_friend->_friend == client)
             {
-                client->friend->private_chat_active = false;
-                client->friend->friend = NULL;
+                client->_friend->available = true;
+                client->_friend->_friend = NULL;
             }
         }
         
-        switch (ll_delete_node(&list, client))
+        switch (ll_delete_node(&db, client->db_node_ref))
         {
             case 0:
                 fprintf(stderr, "[LOG] ll_delete_node: element deleted\n");
@@ -737,6 +774,20 @@ void server_remove_client(Client *client)
                 break;
         }
     }
-    pthread_rwlock_unlock(&list.lock);
+    pthread_rwlock_unlock(&db.lock);
 
+}
+
+bool list_is_client_in_list(Client *client, List *list)
+{
+    if (list->head->client == client || list->tail->client == client)
+        return true;
+    List_Node *node = list->head;
+    while (node)
+    {
+        if (node->client == client)
+            return true;
+        node = node->next;
+    }
+    return false;
 }
