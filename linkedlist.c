@@ -11,9 +11,9 @@ bool ll_append(struct list_header *list, struct list_node *node)
 
     if (list->head == NULL || list->tail == NULL)
     {
+        printf("[LOG] ll_append: head and tail changed\n");
         list->head = node;
         list->tail = node;
-        printf("[LOG] ll_append: head and tail is NULL\n");
         return true;
     } 
     else 
@@ -27,17 +27,15 @@ bool ll_append(struct list_header *list, struct list_node *node)
 
 int ll_delete_node(struct list_header *list, struct list_node *node)
 {
-    struct list_node **head = &list->head;
-    struct list_node **tail = &list->tail;
     struct list_node *tmp = list->head, *prev_node = NULL;
 
-    if (*head == NULL)
+    if (list->head == NULL)
         return 1;
 
-    if (*head == node)
+    if (list->head == node)
     {
-        struct list_node *node = *head;
-        *head = (*head)->next;
+        struct list_node *node = list->head;
+        list->head = list->head->next;
         free(node);
         return 0;
     }
@@ -46,9 +44,9 @@ int ll_delete_node(struct list_header *list, struct list_node *node)
     {
         if (tmp == node)
         {
-            if (tmp == *tail)
+            if (tmp == list->tail)
             {
-                *tail = prev_node;
+                list->tail = prev_node;
                 prev_node->next = NULL;
                 free(tmp);
                 return 0;

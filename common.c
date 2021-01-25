@@ -18,7 +18,8 @@ char * msg_as_cstr(Msg_Type msg)
         case CLIENT_CHOOSE_ITSELF:          return "CLIENT_CHOOSE_ITSELF";
         case CLIENT_UNAVAILABLE:            return "CLIENT_UNAVAILABLE";
         case CLIENT_NOT_FOUND:              return "CLIENT_NOT_FOUND";
-        case CLIENT_CHOOSE_PARTNER:         return "CLIENT_CHOOSE_PARTNER";
+        case CLIENT_ADD_FRIEND:         return "CLIENT_ADD_FRIEND";
+        case CLIENT_CHOOSE_FRIEND:         return "CLIENT_CHOOSE_FRIEND";
         case CLIENT_USERNAME_TAKEN:         return "USERNAME_TAKEN";
         case CLIENT_REGISTERED:             return "CLIENT_REGISTERED";
         case CLIENT_CHAT_START:             return "CLIENT_CHAT_START";
@@ -53,7 +54,8 @@ Msg_Type cstr_as_msg(char *cstring)
     else if (strcmp(cstring, "CLIENT_CHAT_START") == 0)             return CLIENT_CHAT_START;
     else if (strcmp(cstring, "CLIENT_CHAT_QUIT") == 0)              return CLIENT_CHAT_QUIT;
     else if (strcmp(cstring, "CLIENT_CHAT_CLOSED") == 0)              return CLIENT_CHAT_CLOSED;
-    else if (strcmp(cstring, "CLIENT_CHOOSE_PARTNER") == 0)         return CLIENT_CHOOSE_PARTNER;
+    else if (strcmp(cstring, "CLIENT_ADD_FRIEND") == 0)         return CLIENT_ADD_FRIEND;
+    else if (strcmp(cstring, "CLIENT_CHOOSE_FRIEND") == 0)         return CLIENT_CHOOSE_FRIEND;
     else if (strcmp(cstring, "CLIENT_PARTNER_NULL") == 0)           return CLIENT_PARTNER_NULL;
     else if (strcmp(cstring, "CLIENT_PARTNER_SELECTED") == 0)       return CLIENT_PARTNER_SELECTED;
     else if (strcmp(cstring, "CLIENT_PARTNERS_PARTNER_NULL") == 0)  return CLIENT_PARTNERS_PARTNER_NULL;

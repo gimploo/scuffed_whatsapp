@@ -25,7 +25,7 @@ void        server_remove_client(Client *client);
 // Client
 Client *    client_create_node(int socket, char *addr);
 void        client_get_info(Client *);
-Client *    client_set_friend(Client *client);
+Client *    client_add_friend(Client *client);
 
 // Private chat
 int         client_friend_chat_setup(Client *client);
@@ -343,9 +343,9 @@ void * server_recv(void *pclient)
                 server_send_response(client, CLIENT_REGISTERED);
                 break;
 
-             case CLIENT_CHOOSE_PARTNER:
-                server_send_response(client, CLIENT_CHOOSE_PARTNER);
-                client_set_friend(client);
+             case CLIENT_ADD_FRIEND:
+                server_send_response(client, CLIENT_ADD_FRIEND);
+                client_add_friend(client);
                 break;
 
              case CLIENT_CHAT_SETUP:
@@ -362,6 +362,9 @@ void * server_recv(void *pclient)
                         break;
                     case -4:
                         server_send_response(client, FAILED);
+                        break;
+                    case -5:
+                        server_send_response(client, CLIENT_NOT_FOUND);
                         break;
                 }
                 break;
@@ -488,7 +491,7 @@ Client * list_get_client_by_name(char *name, List *list)
     return NULL;
 }
 
-Client * client_set_friend(Client *client)
+Client * client_add_friend(Client *client)
 {
     char recvline[MAXLINE+1];
 
@@ -496,13 +499,13 @@ Client * client_set_friend(Client *client)
     Client *other_client = list_get_client_by_name(recvline, &db);
     if (other_client == NULL)
     {
-       fprintf(stderr, "[ERR] client_set_friend: client choose invalid client\n");
+       fprintf(stderr, "[ERR] client_add_friend: client choose invalid client\n");
        server_send_response(client, CLIENT_NOT_FOUND);
        return NULL;
     } 
     else if (client == other_client)
     {
-       fprintf(stderr, "[ERR] client_set_friend: client choose him/her self\n");
+       fprintf(stderr, "[ERR] client_add_friend: client choose him/her self\n");
        server_send_response(client, CLIENT_CHOOSE_ITSELF);
        return NULL;
     } 
@@ -512,7 +515,10 @@ Client * client_set_friend(Client *client)
     friend_node->next = NULL;
 
     pthread_rwlock_wrlock(&db.lock);
-        ll_append(&client->friends_list, friend_node);
+    {
+        if (ll_append(&client->friends_list, friend_node))
+            client->friends_list.count++;
+    }
     pthread_rwlock_unlock(&db.lock);
 
     server_send_response(client, CLIENT_PARTNER_SELECTED);
@@ -525,30 +531,36 @@ int client_friend_chat_setup(Client *client)
     char recvline[MAXLINE+1];
     Client *friend = NULL;
 
-    // YOU havent choose a friend 
     if (client->friends_list.head == NULL)
     {
-        fprintf(stderr, "[ERR] client_friend_chat_setup: client friend is null\n");
+        // YOU havent choose a friend 
+        fprintf(stderr, "[ERR] client_friend_chat_setup: clients friend list is empty\n");
         return -1;
     }
-
-    // TODO: Since we have a friends list, we need to ask the user 
-    // to whom he/she wants to talk to
-    server_recvline(client, recvline, MAXWORD);
-    friend = list_get_client_by_name(recvline, &client->friends_list);
-    if (friend == NULL)
+    else if (client->friends_list.head != NULL)
     {
-        fprintf(stderr, "[ERR] client_friend_chat_setup: friend not found\n");
-        return -5;
+        // If the client has more than one friend
+        server_send_response(client, CLIENT_CHOOSE_FRIEND);
+        server_recvline(client, recvline, MAXWORD);
+        friend = list_get_client_by_name(recvline, &client->friends_list);
+        if (friend == NULL)
+        {
+            fprintf(stderr, "[ERR] client_friend_chat_setup: friend not found\n");
+            return -5;
+        }
+        if (friend->friends_list.head == NULL || friend->friends_list.tail == NULL)
+        {
+            fprintf(stderr, "[ERR] client_friend_chat_setup: friends friends list is empty\n");
+            return -2;
+        }
     }
-    // TODO: write a function to check if a client_node is in a friends_list
 
     pthread_rwlock_wrlock(&db.lock);
     {
         // Checking whether the client in the friends list
         if (list_is_client_in_list(client, &friend->friends_list) == false)
         {
-            fprintf(stderr, "[LOG] client_friend_chat_setup: client not found in friends list\n");
+            fprintf(stderr, "[LOG] client_friend_chat_setup: client not found in friend`s friends list\n");
             pthread_rwlock_unlock(&db.lock);
             return -2;
         }

@@ -168,7 +168,13 @@ void * client_recv(void *pclient)
                 fprintf(stderr, "[!] He/she`s busy\n");
                 break;
 
-            case CLIENT_CHOOSE_PARTNER:
+            case CLIENT_ADD_FRIEND:
+                pthread_mutex_lock(&pause_lock);
+                    pause_thread = true;
+                pthread_mutex_unlock(&pause_lock);
+                client_choose_friend(client);
+                break;
+            case CLIENT_CHOOSE_FRIEND:
                 pthread_mutex_lock(&pause_lock);
                     pause_thread = true;
                 pthread_mutex_unlock(&pause_lock);
@@ -218,6 +224,15 @@ void * client_recv(void *pclient)
                 break;
 
             case CLIENT_CHAT_START:
+                if (pause_thread == true)
+                {
+                    pthread_mutex_lock(&pause_lock);
+                    {
+                        pause_thread = false;
+                        pthread_cond_signal(&pause_cond);
+                    }
+                    pthread_mutex_unlock(&pause_lock);
+                }
                 client_send_request(client, CLIENT_CHAT_START);
                 state_tracker = 1;
                 printf("\n[!] PRIVATE CHAT MODE\n");
@@ -292,7 +307,7 @@ int menu(Client *client, int state)
         switch (choice[0])
         {
             case 'a':
-                client_send_request(client, CLIENT_CHOOSE_PARTNER);
+                client_send_request(client, CLIENT_ADD_FRIEND);
                 break;
             case 'b':
                 client_send_request(client, CLIENT_GROUP_ADD_MEMBER);
