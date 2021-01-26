@@ -3,6 +3,7 @@
 #include "thread_pool.h"
 
 List db = {
+    .name = "db",
     .head = NULL,
     .tail = NULL,
     .count = 0,
@@ -126,12 +127,14 @@ Client * client_create_node(int socket, char addr[])
     client->available = true;
     client->_friend = NULL;
     client->friends_list = (List) {
+        .name = "Friend`s list",
         .head = NULL,
         .tail = NULL,
         .count = 0,
         .lock = PTHREAD_RWLOCK_INITIALIZER
     };
     client->group_members = (List){
+        .name = "Group`s list",
         .head = NULL,
         .tail = NULL,
         .count = 0,
@@ -259,7 +262,7 @@ int server_init(short port, int backlog)
 
 void list_print(List *list)
 {
-    printf("[LOG] Active user list: ");
+    printf("[LOG] %s user list: ", list->name);
     List_Node *node = list->head;
     if (node == NULL)
         printf("none\n");
@@ -525,6 +528,7 @@ Client * client_add_friend(Client *client)
             client->friends_list.count++;
     }
     pthread_rwlock_unlock(&db.lock);
+    list_print(&client->friends_list);
 
     server_send_response(client, CLIENT_PARTNER_SELECTED);
 
@@ -743,6 +747,7 @@ void *client_friend_chat_thread_handler(void *pclient)
         client->_friend->available = true;
         server_sendline(client->_friend, mssg, MAXLINE);
         server_send_response(client, CLIENT_CHAT_CLOSED);
+
         client->_friend = NULL;
         client->_friend->_friend = NULL;
     }
@@ -767,6 +772,7 @@ void server_add_client(Client *client)
         db.count++;
     }
     pthread_rwlock_unlock(&db.lock);
+    list_print(&db);
 }
 
 void server_remove_client(Client *client)
