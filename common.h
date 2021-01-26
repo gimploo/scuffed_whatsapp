@@ -76,6 +76,7 @@ struct list_node {
 struct list_header {
     struct list_node *head;
     struct list_node *tail;
+    char name[25];
     unsigned count;
     pthread_rwlock_t lock;
 };

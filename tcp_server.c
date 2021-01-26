@@ -131,7 +131,7 @@ Client * client_create_node(int socket, char addr[])
         .count = 0,
         .lock = PTHREAD_RWLOCK_INITIALIZER
     };
-    client->group_members = (List) {
+    client->group_members = (List){
         .head = NULL,
         .tail = NULL,
         .count = 0,
@@ -511,6 +511,11 @@ Client * client_add_friend(Client *client)
     } 
     
     List_Node *friend_node = malloc(sizeof(List_Node));
+    if (friend_node == NULL)
+    {
+        fprintf(stderr, "[client_add_friend: failed to allocate\n");
+        return NULL;
+    }
     friend_node->client = other_client;
     friend_node->next = NULL;
 
@@ -533,9 +538,14 @@ int client_friend_chat_setup(Client *client)
 
     if (client->friends_list.head == NULL)
     {
-        // YOU havent choose a friend 
+        // If the client has not friend
         fprintf(stderr, "[ERR] client_friend_chat_setup: clients friend list is empty\n");
         return -1;
+    }
+    else if (client->friends_list.head != NULL && client->friends_list.head->next == NULL)
+    {
+        // If the client has only a single friend
+        friend = client->friends_list.head->client;
     }
     else if (client->friends_list.head != NULL)
     {
@@ -557,7 +567,7 @@ int client_friend_chat_setup(Client *client)
 
     pthread_rwlock_wrlock(&db.lock);
     {
-        // Checking whether the client in the friends list
+        // Checking whether the client is in "friend`s" friends list
         if (list_is_client_in_list(client, &friend->friends_list) == false)
         {
             fprintf(stderr, "[LOG] client_friend_chat_setup: client not found in friend`s friends list\n");
@@ -568,6 +578,8 @@ int client_friend_chat_setup(Client *client)
         {
             // he/she is available and wants to talk to you
             client->available = friend->available = false;
+            client->_friend = friend;
+            friend->_friend = client;
         }
         else if (friend->available == false)
         {
@@ -731,6 +743,8 @@ void *client_friend_chat_thread_handler(void *pclient)
         client->_friend->available = true;
         server_sendline(client->_friend, mssg, MAXLINE);
         server_send_response(client, CLIENT_CHAT_CLOSED);
+        client->_friend = NULL;
+        client->_friend->_friend = NULL;
     }
     pthread_rwlock_unlock(&client->friends_list.lock);
     return NULL;
@@ -792,9 +806,12 @@ void server_remove_client(Client *client)
 
 bool list_is_client_in_list(Client *client, List *list)
 {
+    List_Node *node = list->head;
+    if (node == NULL)
+        return false;
+
     if (list->head->client == client || list->tail->client == client)
         return true;
-    List_Node *node = list->head;
     while (node)
     {
         if (node->client == client)
