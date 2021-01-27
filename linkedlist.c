@@ -1,8 +1,14 @@
 #include "common.h"
 #include "linkedlist.h"
 
-bool ll_append(struct list_header *list, struct list_node *node)
+bool ll_append(struct list_header *list, Client *client)
 {
+    List_Node *new_node = malloc(sizeof(*new_node));
+    if (new_node == NULL)
+        return false;
+    new_node->client = client;
+    new_node->next = NULL;
+
     if (list == NULL)
     {
         fprintf(stderr, "[ERR] ll_append: list argument is null\n");
@@ -12,27 +18,27 @@ bool ll_append(struct list_header *list, struct list_node *node)
     if (list->head == NULL || list->tail == NULL)
     {
         printf("[LOG] ll_append: head and tail changed\n");
-        list->head = node;
-        list->tail = node;
+        list->head = new_node;
+        list->tail = new_node;
         return true;
     } 
     else 
     {
         printf("[LOG] ll_append: appended to list\n");
-        list->tail->next = node;
-        list->tail = node;
+        list->tail->next = new_node;
+        list->tail = new_node;
         return true;
     }
 }
 
-int ll_delete_node(struct list_header *list, struct list_node *node)
+int ll_delete_node(struct list_header *list, Client *client)
 {
-    struct list_node *tmp = list->head, *prev_node = NULL;
+    List_Node *tmp = list->head, *prev_node = NULL;
 
     if (list->head == NULL)
         return 1;
 
-    if (list->head == node)
+    if (list->head->client == client)
     {
         struct list_node *node = list->head;
         list->head = list->head->next;
@@ -42,7 +48,7 @@ int ll_delete_node(struct list_header *list, struct list_node *node)
 
     while (tmp)
     {
-        if (tmp == node)
+        if (tmp->client == client)
         {
             if (tmp == list->tail)
             {
