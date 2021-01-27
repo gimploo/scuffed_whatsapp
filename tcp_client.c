@@ -10,18 +10,18 @@ volatile bool pause_thread = false;
 // Client state
 static int state_tracker = 0;
 
-Client *    client_init(short server_port);
-void        client_thread_init(Client *client);
-void *      client_send(void *pclient);
-void *      client_recv(void *client);
-void        print_active_users(char buffer[]);
-void        client_send_info(Client *client);
-void        client_sendline(Client *client, char buffer[], int limit);
-void        client_recvline(Client *client, char buffer[], int limit);
-void        client_send_request(Client *client, Msg_Type request);
-void        client_choose_friend(Client *client);
-int         menu(Client *client, int state);
-void        client_choose_group_member(Client *client);
+Client * client_init(short server_port);
+void     client_thread_init(Client *client);
+void *   client_send(void *pclient);
+void *   client_recv(void *client);
+void     print_active_users(char buffer[]);
+void     client_send_info(Client *client);
+void     client_sendline(Client *client, char buffer[], int limit);
+void     client_recvline(Client *client, char buffer[], int limit);
+void     client_send_request(Client *client, Msg_Type request);
+void     client_choose_friend(Client *client);
+int      menu(Client *client, int state);
+void     client_choose_group_member(Client *client);
 
 int main(int argc, char *argv[])
 {
@@ -110,7 +110,7 @@ void * client_send(void *pclient)
         } while (strcmp(sendline, "\0") == 0);
 
         // User input handling
-        if (strcmp(sendline, "exit()") == 0)
+        if (strcmp(sendline, "/exit") == 0)
         {
             printf("[?] Do you want to exit (y or n): ");
             if ((chr = getchar()) == 'n')
@@ -130,7 +130,7 @@ void * client_send(void *pclient)
             system("clear");
             continue;
         }
-        else if (strcmp(sendline, "menu()") == 0)
+        else if (strcmp(sendline, "/menu") == 0)
         {
             if (menu(client, state_tracker) == 0)
             {
@@ -174,6 +174,14 @@ void * client_recv(void *pclient)
                 pthread_mutex_unlock(&pause_lock);
                 client_choose_friend(client);
                 break;
+
+            case CLIENT_REMOVE_FRIEND:
+                pthread_mutex_lock(&pause_lock);
+                    pause_thread = true;
+                pthread_mutex_unlock(&pause_lock);
+                client_choose_friend(client);
+                break;
+
             case CLIENT_CHOOSE_FRIEND:
                 pthread_mutex_lock(&pause_lock);
                     pause_thread = true;
@@ -272,7 +280,14 @@ void * client_recv(void *pclient)
                 printf("[!] Group invite sent! \n");
                 break;
 
+            case SUCCESS:
             case FAILED:
+                pthread_mutex_lock(&pause_lock);
+                {
+                    pause_thread = false;
+                    pthread_cond_signal(&pause_cond);
+                }
+                pthread_mutex_unlock(&pause_lock);
                 fprintf(stderr, "[!] Past execution failed\n");
                 break;
 
@@ -296,7 +311,8 @@ int menu(Client *client, int state)
         printf("b. Add a friend to your group\n");
         printf("c. Text a friend\n");
         printf("d. Broadcast to friends\n");
-        printf("e. Check whose online\n");
+        printf("e. Remove a friend\n");
+        printf("f. Check whose online\n");
         printf("--------------\n");
 
         do {
@@ -321,6 +337,9 @@ int menu(Client *client, int state)
                 return 1;
                 break;
             case 'e':
+                client_send_request(client, CLIENT_REMOVE_FRIEND);
+                break;
+            case 'f':
                 client_send_request(client, ACTIVE_USERS);
                 break;
             default:
