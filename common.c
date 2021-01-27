@@ -32,6 +32,7 @@ char * msg_as_cstr(Msg_Type msg)
         case CLIENT_PARTNERS_PARTNER_NULL:  return "CLIENT_PARTNERS_PARTNER_NULL";
         case CLIENT_GROUP_EMPTY:            return "CLIENT_GROUP_EMPTY";
         case CLIENT_GROUP_ADD_MEMBER:       return "CLIENT_GROUP_ADD_MEMBER";
+        case CLIENT_GROUP_MEMBER_EXIST:     return "CLIENT_GROUP_MEMBER_EXIST";
         case CLIENT_GROUP_OVERFLOW:         return "CLIENT_GROUP_OVERFLOW";
         case CLIENT_GROUP_BROADCAST_SETUP:  return "CLIENT_GROUP_BROADCAST_SETUP";
         case CLIENT_GROUP_BROADCAST_START:       return "CLIENT_GROUP_BROADCAST_START";
@@ -68,5 +69,6 @@ Msg_Type cstr_as_msg(char *cstring)
     else if (strcmp(cstring, "CLIENT_GROUP_BROADCAST_CLOSE") == 0)  return CLIENT_GROUP_BROADCAST_CLOSE;
     else if (strcmp(cstring, "CLIENT_GROUP_ADD_MEMBER") == 0)       return CLIENT_GROUP_ADD_MEMBER;
     else if (strcmp(cstring, "CLIENT_GROUP_MEMBER_ADDED") == 0)     return CLIENT_GROUP_MEMBER_ADDED;
+    else if (strcmp(cstring, "CLIENT_GROUP_MEMBER_EXIST") == 0)     return CLIENT_GROUP_MEMBER_EXIST;
     else                                                            return INVALID;
 }
