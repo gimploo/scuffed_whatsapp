@@ -270,6 +270,14 @@ void * client_recv(void *pclient)
                 client_choose_group_member(client);
                 break;
 
+            case CLIENT_GROUP_MEMBER_EXIST:
+                pthread_mutex_lock(&pause_lock);
+                {
+                    pause_thread = false;
+                    pthread_cond_signal(&pause_cond);
+                }
+                pthread_mutex_unlock(&pause_lock);
+                printf("[!] Member already added! \n");
             case CLIENT_GROUP_MEMBER_ADDED:
                 pthread_mutex_lock(&pause_lock);
                 {
