@@ -33,7 +33,7 @@ bool ll_append(struct list_header *list, Client *client)
 
 int ll_delete_node(struct list_header *list, Client *client)
 {
-    List_Node *tmp = list->head, *prev_node = NULL;
+    List_Node *this_node = list->head, *prev_node = NULL;
 
     if (list->head == NULL)
         return 1;
@@ -46,23 +46,23 @@ int ll_delete_node(struct list_header *list, Client *client)
         return 0;
     }
 
-    while (tmp)
+    while (this_node)
     {
-        if (tmp->client == client)
+        if (this_node->client == client)
         {
-            if (tmp == list->tail)
+            if (this_node == list->tail)
             {
                 list->tail = prev_node;
                 prev_node->next = NULL;
-                free(tmp);
+                free(this_node);
                 return 0;
             }
-            prev_node->next = tmp->next; 
-            free(tmp);
+            prev_node->next = this_node->next; 
+            free(this_node);
             return 0;
         }
-        prev_node = tmp;
-        tmp = tmp->next;
+        prev_node = this_node;
+        this_node = this_node->next;
     }
     return 2;
 }

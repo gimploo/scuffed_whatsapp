@@ -278,6 +278,8 @@ void * client_recv(void *pclient)
                 }
                 pthread_mutex_unlock(&pause_lock);
                 printf("[!] Member already added! \n");
+                break;
+
             case CLIENT_GROUP_MEMBER_ADDED:
                 pthread_mutex_lock(&pause_lock);
                 {
