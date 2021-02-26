@@ -3,7 +3,7 @@
 
 bool ll_append(struct list_header *list, Client *client)
 {
-    List_Node *new_node = malloc(sizeof(*new_node));
+    Node *new_node = malloc(sizeof(*new_node));
     if (new_node == NULL)
         return false;
     new_node->client = client;
@@ -33,7 +33,7 @@ bool ll_append(struct list_header *list, Client *client)
 
 int ll_delete_node(struct list_header *list, Client *client)
 {
-    List_Node *this_node = list->head, *prev_node = NULL;
+    Node *this_node = list->head, *prev_node = NULL;
 
     if (list->head == NULL)
         return 1;
