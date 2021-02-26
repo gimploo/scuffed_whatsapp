@@ -23,7 +23,7 @@
 #define MAXSND 6144
 #define MAXLINE 4096
 #define MAXWORD 1024
-#define MAX_MEMBERS 3
+#define MAX_GROUPS 3
 #define LOCALHOST "127.0.0.1"
 #define IPV4_STRLEN 16
 #define SERVER_BACKLOG 10
@@ -63,11 +63,11 @@ typedef enum {
     CLIENT_GROUP_EMPTY,
     CLIENT_GROUP_OVERFLOW,
     CLIENT_GROUP_ADD_MEMBER,
+    CLIENT_GROUP_MEMBER_ADDED,
     CLIENT_GROUP_MEMBER_EXIST,
-    CLIENT_GROUP_BROADCAST_SETUP,
-    CLIENT_GROUP_BROADCAST_START,
-    CLIENT_GROUP_BROADCAST_CLOSE,
-    CLIENT_GROUP_MEMBER_ADDED
+    CLIENT_GROUP_CHATROOM_SETUP,
+    CLIENT_GROUP_CHATROOM_START,
+    CLIENT_GROUP_CHATROOM_CLOSE,
 } Msg_Type;
 
 struct list_node {
@@ -83,6 +83,7 @@ struct list_header {
     pthread_rwlock_t lock;
 };
 
+
 struct client_node {
     int socket;
     char name[MAXWORD+1];
@@ -91,15 +92,19 @@ struct client_node {
 
     // Client lists
     struct list_header friends_list;
-    struct list_header group_members;
+    struct list_header my_group;
 
+    // Group
+    struct list_header groups_iam_in; //holds user names
+    
+    // Current partner
     struct client_node *_friend;
-    struct list_node *db_node_ref;
 };
+
 
 typedef struct client_node Client;
 typedef struct list_header List;
-typedef struct list_node List_Node;
+typedef struct list_node Node;
 
 
 // Takes input from the user and stores in buffer[]
