@@ -136,6 +136,8 @@ void * client_send(void *pclient)
             {
                 printf("[*] Press Enter to continue ....");
                 while(getchar() != '\n');
+            } else {
+                while(getchar() != '\n');
             }
         }
         else 
@@ -190,11 +192,11 @@ void * client_recv(void *pclient)
                 break;
 
             case CLIENT_PARTNER_NULL:
-                fprintf(stderr, "\n[!] Invite a friend\n");
+                fprintf(stderr, "[!] Invite a friend\n");
                 break;
 
             case CLIENT_PARTNERS_PARTNER_NULL:
-                fprintf(stderr, "\n[!] Friend request pending\n");
+                fprintf(stderr, "[!] Friend request pending\n");
                 break;
 
             case CLIENT_NOT_FOUND:
@@ -243,22 +245,22 @@ void * client_recv(void *pclient)
                 }
                 client_send_request(client, CLIENT_CHAT_START);
                 state_tracker = 1;
-                printf("\n[!] PRIVATE CHAT MODE\n");
+                printf("[!] PRIVATE CHAT MODE\n");
                 break;
 
             case CLIENT_CHAT_CLOSED:
-            case CLIENT_GROUP_BROADCAST_CLOSE:
+            case CLIENT_GROUP_CHATROOM_CLOSE:
                 state_tracker = 0;
                 break;
 
-            case CLIENT_GROUP_BROADCAST_START:
-                client_send_request(client, CLIENT_GROUP_BROADCAST_START);
+            case CLIENT_GROUP_CHATROOM_START:
+                client_send_request(client, CLIENT_GROUP_CHATROOM_START);
                 state_tracker = 1;
-                printf("\n[!] GROUP CHAT MODE\n");
+                printf("[!] GROUP CHAT MODE\n");
                 break;
 
             case CLIENT_GROUP_EMPTY:
-                printf("\n[!] Invite a friend to the group\n");
+                printf("[!] Invite a friend to the group\n");
                 break;
 
             case CLIENT_GROUP_ADD_MEMBER:
@@ -343,7 +345,7 @@ int menu(Client *client, int state)
                 return 1;
                 break;
             case 'd':
-                client_send_request(client, CLIENT_GROUP_BROADCAST_SETUP);
+                client_send_request(client, CLIENT_GROUP_CHATROOM_SETUP);
                 return 1;
                 break;
             case 'e':
